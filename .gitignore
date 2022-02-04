@@ -4,3 +4,4 @@ dist
 OneCC_bool.egg-info
 OneCC_bool/__pycache__
 .DS_store
+OneCC_bool/.ipynb_checkpoints
