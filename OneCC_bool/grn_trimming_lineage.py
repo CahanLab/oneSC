@@ -1,6 +1,7 @@
 import numpy as np 
 import pandas as pd
 import scipy.stats
+from sklearn.mixture import GaussianMixture
 
 # this function is to find the threshold of the genes based on the data observation 
 # this could obviously be a little bit better 
@@ -25,7 +26,7 @@ def find_boolean_across_time(exp_df, samp_st, cluster_col, trajectory_list, bool
 # find the diff vectors across the time series 
 def find_diff_boolean(mean_bool_df): 
     diff_bool_df = pd.DataFrame()
-    for i in list(range(0, mean_bool_df.shape[0])):
+    for i in list(range(0, mean_bool_df.shape[1])):
         if i == 0:
             diff_bool_df[i] = mean_bool_df[i]
         else:
@@ -33,11 +34,12 @@ def find_diff_boolean(mean_bool_df):
             temp_mean_diff = mean_bool_df[i] - mean_bool_df[i - 1]
             if temp_mean_diff.eq(0).all() == False:
                 diff_bool_df[i] = temp_mean_diff
-
+    
+    diff_bool_df.columns = list(range(0, diff_bool_df.shape[1]))
     return diff_bool_df
 
 # suggested some edge using average pearson correlation across different lineage 
-def edge_suggestion(TG, TFs, train_exp, train_st, trajectory_cluster_dict, cluster_col = "cluster"): 
+def edge_suggestion(TG, TFs, train_exp, trajectory_cells_dict): 
     
     corr_list = list()
     raw_corr_list = list()
@@ -46,10 +48,9 @@ def edge_suggestion(TG, TFs, train_exp, train_st, trajectory_cluster_dict, clust
         temp_corr = list()
         temp_raw_corr = list()
 
-        for end_state in trajectory_cluster_dict.keys():
-            trajectory_list = trajectory_cluster_dict[end_state]
-            sub_train_st = train_st.loc[train_st[cluster_col].isin(trajectory_list), :]
-            sub_train_exp = train_exp.loc[:, sub_train_st.index]
+        for trajectory_state in trajectory_cells_dict.keys():
+            trajectory_cells = trajectory_cells_dict[trajectory_state]
+            sub_train_exp = train_exp.loc[:, trajectory_cells]
 
             TG_exp = sub_train_exp.loc[list(TG.index), :]
             TG_exp = np.array(TG_exp.iloc[0, :])
@@ -76,25 +77,72 @@ def edge_suggestion(TG, TFs, train_exp, train_st, trajectory_cluster_dict, clust
     stats_tab = stats_tab.sort_values("correlation", axis = 0, ascending=False)
     return stats_tab 
 
+
+def compile_lineage_sampTab(train_exp, samp_tab, pt_col): 
+    
+    temp_pseudo_time = samp_tab[pt_col]
+    temp_pseudo_time = temp_pseudo_time.dropna()
+    
+    temp_train_exp = train_exp.loc[:, temp_pseudo_time.index]
+    sub_train_gmm = temp_train_exp.copy()
+    sub_train_gmm = sub_train_gmm.T
+    sub_train_gmm['pseudoTime'] = temp_pseudo_time
+    
+    all_ks = list(range(2, 20))
+    BIC_scores = list()
+    for temp_k in all_ks: 
+        gm = GaussianMixture(n_components=temp_k, random_state=0).fit(sub_train_gmm)
+        cluster_label = gm.predict(sub_train_gmm)
+        BIC_scores.append(gm.bic(sub_train_gmm))
+        
+    selected_k = all_ks[np.argmin(BIC_scores)]
+    
+    gm = GaussianMixture(n_components=selected_k, random_state=0).fit(sub_train_gmm)
+    cluster_label = gm.predict(sub_train_gmm)
+    cluster_label = [str(x) + "_cluster" for x in cluster_label]
+    
+    return_sampTab = pd.DataFrame()
+    return_sampTab.index = sub_train_gmm.index
+    return_sampTab['cluster_label'] = cluster_label 
+    return_sampTab['pseudoTime'] = temp_pseudo_time
+    
+    temp_clusters = np.unique(return_sampTab['cluster_label'])
+    avg_pseudoTime = list()
+
+    for temp_cluster in temp_clusters: 
+        cluster_temp_st = return_sampTab.loc[return_sampTab['cluster_label'] == temp_cluster, :]
+        cluster_temp_pseudotime = cluster_temp_st['pseudoTime']
+        avg_pseudoTime.append(np.mean(cluster_temp_pseudotime))
+
+    ordered_clusters = temp_clusters[np.argsort(avg_pseudoTime)]
+
+    return [return_sampTab, ordered_clusters]
+
 # this is to run the wrapper of trimming using lineage 
-def lineage_trimming(orig_grn, train_exp, train_st, trajectory_cluster_dict, cluster_col = 'cluster'):
+def lineage_trimming(orig_grn, train_exp, train_st, trajectory_cells_dict, bool_thresholds, pt_col = 'pseudoTime'):
     
     # calculate the threshold according to the training data 
-    bool_thresholds = find_threshold_vector(train_exp, train_st, cluster_col)
+    # bool_thresholds = find_threshold_vector(train_exp, train_st, cluster_col)
 
     # reindex the dataframe to clarity 
     orig_grn.index = list(range(0, orig_grn.shape[0]))
 
     refined_grn_dict = dict()
-    for end_state in trajectory_cluster_dict.keys():
-        trajectory_list = trajectory_cluster_dict[end_state]
-        mean_bool_df = find_boolean_across_time(train_exp, train_st, cluster_col, trajectory_list, bool_thresholds)
-        mean_diff_bool = find_diff_boolean(mean_bool_df)
+    for end_state in trajectory_cells_dict.keys():
+        trajectory_cells = trajectory_cells_dict[end_state]
+        
+        sub_train_exp = train_exp.loc[:, trajectory_cells]
+        sub_train_st = train_st.loc[trajectory_cells, :]
 
+        trajectory_sampTab, ordered_cluster = compile_lineage_sampTab(sub_train_exp, sub_train_st, pt_col)
+
+        mean_bool_df = find_boolean_across_time(train_exp, trajectory_sampTab, 'cluster_label', ordered_cluster, bool_thresholds)
+        mean_diff_bool = find_diff_boolean(mean_bool_df)
+        print(mean_diff_bool)
         # assign the grn 
         initial_grn = orig_grn.copy()
 
-        running_list = list(range(1, mean_diff_bool.shape[0]))
+        running_list = list(range(1, mean_diff_bool.shape[1]))
         
         for run_index in running_list:
             current_diff = mean_diff_bool[run_index]
@@ -135,7 +183,7 @@ def lineage_trimming(orig_grn, train_exp, train_st, trajectory_cluster_dict, clu
                 else:
                     TG_series = pd.Series(current_diff.loc[temp_TG], [temp_TG])
                     
-                    edge_stats = edge_suggestion(TG_series, prev_diff, train_exp, train_st, trajectory_cluster_dict, cluster_col)
+                    edge_stats = edge_suggestion(TG_series, prev_diff, train_exp, trajectory_cells_dict)
                     new_edge = pd.DataFrame(None, index = [str(edge_stats.iloc[0, 0] + "_" + temp_TG + "_new")], columns = ["TF", "TG", "Type"])
                     new_edge.iloc[0, 0] = edge_stats.iloc[0, 0]
                     new_edge.iloc[0, 1] = temp_TG
@@ -157,7 +205,6 @@ def lineage_trimming(orig_grn, train_exp, train_st, trajectory_cluster_dict, clu
         final_refined_df = pd.concat([final_refined_df, refined_grn_dict[end_state]])
     final_refined_df = final_refined_df.drop_duplicates()
     return final_refined_df
-
 
 
 

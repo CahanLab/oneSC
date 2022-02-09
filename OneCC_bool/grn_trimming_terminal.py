@@ -100,7 +100,7 @@ def find_earliest_activation(target_smoothed_time, thres):
 # currently it only considers the earliest activation 
 # probably need to also consider the earliest suppression 
 
-def trim_network_ss_anti(train_grn, ss_gene_sets, train_exp, train_st, trajectory_cluster_dict, pseudoTime_bin, pt_col = 'pseudo_time', cluster_col = 'cluster'):
+def trim_network_ss_anti(train_grn, ss_gene_sets, train_exp, train_st, trajectory_cells_dict, pseudoTime_bin, pt_col = 'pseudo_time'):
     for temp_ss in ss_gene_sets.keys():
         temp_ss_genes = ss_gene_sets[temp_ss]
 
@@ -171,7 +171,7 @@ def trim_network_ss_anti(train_grn, ss_gene_sets, train_exp, train_st, trajector
 
                     # get lineage from the anti-steady state because the gene uis expressed in that lineage 
                     # find out when exact is that gene expressed in the lineage 
-                    target_st = train_st.loc[train_st[cluster_col].isin(trajectory_cluster_dict[anti_ss]), :]
+                    target_st = train_st.loc[trajectory_cells_dict[anti_ss], :]
 
                     target_time_series = pd.DataFrame()
                     target_time_series.index = target_st.index
@@ -189,7 +189,7 @@ def trim_network_ss_anti(train_grn, ss_gene_sets, train_exp, train_st, trajector
                     poss_act_df = pd.DataFrame()
                     poss_act_time = list()
                     for temp_regulon in poss_act_genes:
-                        regulon_st = train_st.loc[train_st[cluster_col].isin(trajectory_cluster_dict[anti_ss]), :]
+                        regulon_st = train_st.loc[trajectory_cells_dict[anti_ss], :]
 
                         regulon_time_series = pd.DataFrame()
                         regulon_time_series.index = regulon_st.index
@@ -211,7 +211,7 @@ def trim_network_ss_anti(train_grn, ss_gene_sets, train_exp, train_st, trajector
                     poss_sup_df = pd.DataFrame()
                     poss_sup_time = list()
                     for temp_regulon in poss_sup_genes:
-                        regulon_st = train_st.loc[train_st[cluster_col].isin(trajectory_cluster_dict[temp_ss]), :]
+                        regulon_st = train_st.loc[trajectory_cells_dict[temp_ss], :]
 
                         regulon_time_series = pd.DataFrame()
                         regulon_time_series.index = regulon_st.index
@@ -289,3 +289,18 @@ def add_self_ss_edge(train_grn, ss_gene_sets):
                 train_grn = pd.concat([train_grn, additional_df])
     return train_grn 
 
+def define_ss_genes(train_exp, train_st, trajectory_cells_dict, bool_thresholds, pt_col = 'pseudoTime', n_cells = 50): 
+    ss_genes_dict = dict()
+    for lineage in trajectory_cells_dict.keys():
+        sub_cells = trajectory_cells_dict[lineage] 
+        sub_train_exp = train_exp.loc[:, sub_cells]
+        sub_train_st = train_st.loc[sub_cells, :]
+
+        sub_train_st = sub_train_st.sort_values(by = pt_col, ascending = False)
+        sub_train_st = sub_train_st.iloc[0:n_cells, :]
+        sub_train_exp = sub_train_exp.loc[:, sub_train_st.index]
+
+        turned_on_genes = sub_train_exp.mean(axis = 1) > bool_thresholds
+        ss_genes_dict[lineage] = list(turned_on_genes[turned_on_genes == True].index)
+
+    return ss_genes_dict
