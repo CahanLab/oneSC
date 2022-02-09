@@ -138,7 +138,6 @@ def lineage_trimming(orig_grn, train_exp, train_st, trajectory_cells_dict, bool_
 
         mean_bool_df = find_boolean_across_time(train_exp, trajectory_sampTab, 'cluster_label', ordered_cluster, bool_thresholds)
         mean_diff_bool = find_diff_boolean(mean_bool_df)
-        print(mean_diff_bool)
         # assign the grn 
         initial_grn = orig_grn.copy()
 
