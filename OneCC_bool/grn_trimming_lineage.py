@@ -28,7 +28,9 @@ def find_diff_boolean(mean_bool_df):
     diff_bool_df = pd.DataFrame()
     for i in list(range(0, mean_bool_df.shape[1])):
         if i == 0:
-            diff_bool_df[i] = mean_bool_df[i]
+            temp_diff_bool = mean_bool_df[i]
+            temp_diff_bool = temp_diff_bool.replace(0, -1)
+            diff_bool_df[i] = temp_diff_bool
         else:
             # if the difference is 0 then skip 
             temp_mean_diff = mean_bool_df[i] - mean_bool_df[i - 1]
@@ -138,6 +140,7 @@ def lineage_trimming(orig_grn, train_exp, train_st, trajectory_cells_dict, bool_
 
         mean_bool_df = find_boolean_across_time(train_exp, trajectory_sampTab, 'cluster_label', ordered_cluster, bool_thresholds)
         mean_diff_bool = find_diff_boolean(mean_bool_df)
+
         # assign the grn 
         initial_grn = orig_grn.copy()
 
@@ -183,6 +186,7 @@ def lineage_trimming(orig_grn, train_exp, train_st, trajectory_cells_dict, bool_
                     TG_series = pd.Series(current_diff.loc[temp_TG], [temp_TG])
                     
                     edge_stats = edge_suggestion(TG_series, prev_diff, train_exp, trajectory_cells_dict)
+
                     new_edge = pd.DataFrame(None, index = [str(edge_stats.iloc[0, 0] + "_" + temp_TG + "_new")], columns = ["TF", "TG", "Type"])
                     new_edge.iloc[0, 0] = edge_stats.iloc[0, 0]
                     new_edge.iloc[0, 1] = temp_TG

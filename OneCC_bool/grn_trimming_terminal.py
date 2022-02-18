@@ -14,13 +14,14 @@ def find_ss_genes(train_exp, train_st, cluster_col, ss_labels):
     # basically outputs the ss_gene_sets for each steady states
     return None 
 
-def find_inconsistent_genes(real_ss_dict, simulated_ss_dict, threshold_dict): 
+def find_inconsistent_genes(real_ss_dict, simulated_ss_dict, threshold_dict, ss_genes): 
     diff_dict = dict()
     for temp_gene in simulated_ss_dict.keys():
         real_exp = int(real_ss_dict[temp_gene] > threshold_dict[temp_gene])
         sim_exp = int(simulated_ss_dict[temp_gene] > threshold_dict[temp_gene])
         if real_exp == sim_exp: 
-            diff_dict[temp_gene] = real_exp
+            if temp_gene not in ss_genes: # if the gene is not also expressed in target steady state
+                diff_dict[temp_gene] = real_exp
     return diff_dict
 
 # find priority gene based on reachability of the network 
@@ -102,7 +103,7 @@ def find_earliest_activation(target_smoothed_time, thres):
 
 def trim_network_ss_anti(train_grn, ss_gene_sets, train_exp, train_st, trajectory_cells_dict, pseudoTime_bin, pt_col = 'pseudo_time'):
     for temp_ss in ss_gene_sets.keys():
-        temp_ss_genes = ss_gene_sets[temp_ss]
+        temp_ss_genes = ss_gene_sets[temp_ss] # current genes 
 
         temp_grn_ss = train_grn.loc[np.logical_and(train_grn['TF'].isin(temp_ss_genes), train_grn['TG'].isin(temp_ss_genes)), :]
 
@@ -116,7 +117,7 @@ def trim_network_ss_anti(train_grn, ss_gene_sets, train_exp, train_st, trajector
         
         # check if there are mutual antogonization 
         anti_ss_list = list(ss_gene_sets.keys())
-        anti_ss_list.remove(temp_ss) # this should not exist 
+        #anti_ss_list.remove(temp_ss) 
 
         for anti_ss in anti_ss_list:
             not_converge = True
@@ -162,7 +163,7 @@ def trim_network_ss_anti(train_grn, ss_gene_sets, train_exp, train_st, trajector
                 OneCC_sim.simulate_exp(init_dict, MyNetwork.subnet_name, perturb_dict, decay_rate = 0.1, num_sim = 90000, t_interval = 0.1, stochasticity = False)
                 sim_exp = OneCC_sim.sim_exp
                 sim_dict = sim_exp.iloc[:, -1].to_dict()
-                inconsist_genes = find_inconsistent_genes(init_dict, sim_dict, threshold_dict)
+                inconsist_genes = find_inconsistent_genes(init_dict, sim_dict, threshold_dict, temp_ss_genes)
 
                 if len(inconsist_genes) == 0: 
                     not_converge = False
@@ -230,6 +231,7 @@ def trim_network_ss_anti(train_grn, ss_gene_sets, train_exp, train_st, trajector
                     poss_df['time_diff'] = np.abs(poss_df['time'] - target_act_time)
 
                     poss_df = poss_df.sort_values("time_diff")
+                    print(poss_df)
                     additional_df = pd.DataFrame(data = [[poss_df.iloc[0, 0], priority_gene, poss_df.iloc[0, 2]]], columns = ['TF', 'TG', 'Type'])
                     additional_df.index = [str(poss_df.iloc[0, 0] + "_" + priority_gene + "_new")]
                     train_grn = pd.concat([train_grn, additional_df])
