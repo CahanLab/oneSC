@@ -140,7 +140,6 @@ def lineage_trimming(orig_grn, train_exp, train_st, trajectory_cells_dict, bool_
 
         mean_bool_df = find_boolean_across_time(train_exp, trajectory_sampTab, 'cluster_label', ordered_cluster, bool_thresholds)
         mean_diff_bool = find_diff_boolean(mean_bool_df)
-
         # assign the grn 
         initial_grn = orig_grn.copy()
 
@@ -153,7 +152,21 @@ def lineage_trimming(orig_grn, train_exp, train_st, trajectory_cells_dict, bool_
             prev_diff = mean_diff_bool[run_index - 1]
             prev_diff = prev_diff[prev_diff != 0]
 
+            # remove the genes that changed on step back 
             prev_diff = prev_diff[np.setdiff1d(np.array(prev_diff.index), np.array(current_diff.index))]
+
+            # if the the prev difference is 0
+            temp_run_index =  run_index - 1
+            while prev_diff.shape[0] == 0:
+                prev_diff = mean_diff_bool[temp_run_index - 1]
+                prev_diff = prev_diff[prev_diff != 0]
+                prev_diff = prev_diff[np.setdiff1d(np.array(prev_diff.index), np.array(current_diff.index))]
+
+                if temp_run_index > 1:
+                    temp_run_index = temp_run_index - 1
+                if temp_run_index == 1:
+                    break 
+
             for temp_TG in current_diff.index:
                 temp_grn = initial_grn.loc[initial_grn['TG'] == temp_TG, :]
 

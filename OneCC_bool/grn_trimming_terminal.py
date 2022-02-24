@@ -53,12 +53,13 @@ def bin_smooth(time_series, pseudoTime_bin, smooth_style = "median", spline_ME =
 
     while curr_time < np.max(time_series['PseudoTime']): 
         temp_time_series = time_series.loc[np.logical_and(time_series['PseudoTime'] >= curr_time, time_series['PseudoTime'] < curr_time + pseudoTime_bin), :]
-        time_list.append(curr_time)
         
         # in the case of 0 expression 
         if temp_time_series.shape[0] == 0:
+            curr_time = curr_time + pseudoTime_bin # update the current time if there are no expression profiles within the time bin
             continue
 
+        time_list.append(curr_time)
         if smooth_style == 'mean':
             smoothed_exp.append(temp_time_series['expression'].mean())
         elif smooth_style == "median":
@@ -169,7 +170,6 @@ def trim_network_ss_anti(train_grn, ss_gene_sets, train_exp, train_st, trajector
                     not_converge = False
                 else: 
                     priority_gene = find_priority_gene(temp_grn_all, list(inconsist_genes.keys()))
-
                     # get lineage from the anti-steady state because the gene uis expressed in that lineage 
                     # find out when exact is that gene expressed in the lineage 
                     target_st = train_st.loc[trajectory_cells_dict[anti_ss], :]
@@ -199,7 +199,7 @@ def trim_network_ss_anti(train_grn, ss_gene_sets, train_exp, train_st, trajector
 
                         regulon_smoothed_time = bin_smooth(regulon_time_series, pseudoTime_bin, smooth_style = "median", spline_ME = 0.1)
                         temp_regulon_act_time = find_earliest_activation(regulon_smoothed_time, threshold_dict[temp_regulon])
-
+                        
                         poss_act_time.append(temp_regulon_act_time)
                     poss_act_df['TF'] = poss_act_genes
                     poss_act_df['time'] = temp_regulon_act_time
@@ -221,8 +221,9 @@ def trim_network_ss_anti(train_grn, ss_gene_sets, train_exp, train_st, trajector
 
                         regulon_smoothed_time = bin_smooth(regulon_time_series, pseudoTime_bin, smooth_style = "median", spline_ME = 0.1)
                         temp_regulon_sup_time = find_earliest_activation(regulon_smoothed_time, threshold_dict[temp_regulon])
-
+                        
                         poss_sup_time.append(temp_regulon_sup_time)
+
                     poss_sup_df['TF'] = poss_sup_genes
                     poss_sup_df['time'] = poss_sup_time
                     poss_sup_df['Type'] = "-"
@@ -231,7 +232,12 @@ def trim_network_ss_anti(train_grn, ss_gene_sets, train_exp, train_st, trajector
                     poss_df['time_diff'] = np.abs(poss_df['time'] - target_act_time)
 
                     poss_df = poss_df.sort_values("time_diff")
-                    print(poss_df)
+
+                    # if there are no suitable edge to be added 
+                    if poss_df.shape[0] == 0:
+                        not_converge = False
+                        break 
+
                     additional_df = pd.DataFrame(data = [[poss_df.iloc[0, 0], priority_gene, poss_df.iloc[0, 2]]], columns = ['TF', 'TG', 'Type'])
                     additional_df.index = [str(poss_df.iloc[0, 0] + "_" + priority_gene + "_new")]
                     train_grn = pd.concat([train_grn, additional_df])
@@ -281,10 +287,20 @@ def add_self_ss_edge(train_grn, ss_gene_sets):
             for gene in sim_dict.keys():
                 if gene in temp_ss_genes:
                     if sim_dict[gene] < threshold_dict[gene]:
-                        genes_self_reg.append(gene)
+                        
+                        # check if the gene is already auto regulated 
+                        new_temp_grn_ss = temp_grn_ss.loc[temp_grn_ss['TF'] == gene, :]
+                        new_temp_grn_ss = new_temp_grn_ss.loc[temp_grn_ss['TG'] == gene, :]
+                        if new_temp_grn_ss.shape[0] == 0:
+                            genes_self_reg.append(gene)
+            
             if len(genes_self_reg) == 0:
                 not_converge = False
             else:
+
+                print(temp_grn_ss)
+                print(genes_self_reg)
+
                 priority_gene = find_priority_gene(temp_grn_ss, genes_self_reg)
                 additional_df = pd.DataFrame(data = [[priority_gene, priority_gene, "+"]], columns = ['TF', 'TG', 'Type'])
                 additional_df.index = [str(priority_gene + "_" + priority_gene + "_new")]
