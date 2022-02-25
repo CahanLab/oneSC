@@ -54,9 +54,9 @@ def bin_smooth(time_series, pseudoTime_bin, smooth_style = "median", spline_ME =
     while curr_time < np.max(time_series['PseudoTime']): 
         temp_time_series = time_series.loc[np.logical_and(time_series['PseudoTime'] >= curr_time, time_series['PseudoTime'] < curr_time + pseudoTime_bin), :]
         
-        # in the case of 0 expression 
+        # in the case of 0 expression just move on to the next time frame and move on 
         if temp_time_series.shape[0] == 0:
-            curr_time = curr_time + pseudoTime_bin # update the current time if there are no expression profiles within the time bin
+            curr_time = curr_time + pseudoTime_bin
             continue
 
         time_list.append(curr_time)
@@ -74,10 +74,9 @@ def bin_smooth(time_series, pseudoTime_bin, smooth_style = "median", spline_ME =
     smoothed_data['PseudoTime'] = time_list
     smoothed_data['expression'] = smoothed_exp
 
-    spline_s = smoothed_data.shape[0] * (spline_ME ** 2)
-    spline_xy = UnivariateSpline(smoothed_data['PseudoTime'],smoothed_data['expression'], s = spline_s)
-    smoothed_data['splined_exp'] = spline_xy(smoothed_data['PseudoTime'])
-
+    #spline_s = smoothed_data.shape[0] * (spline_ME ** 2)
+    #spline_xy = UnivariateSpline(smoothed_data['PseudoTime'],smoothed_data['expression'], s = spline_s)
+    #moothed_data['splined_exp'] = spline_xy(smoothed_data['PseudoTime'])
     return smoothed_data 
 
 def find_earliest_activation(target_smoothed_time, thres):
@@ -102,7 +101,7 @@ def find_earliest_activation(target_smoothed_time, thres):
 # currently it only considers the earliest activation 
 # probably need to also consider the earliest suppression 
 
-def trim_network_ss_anti(train_grn, ss_gene_sets, train_exp, train_st, trajectory_cells_dict, pseudoTime_bin, pt_col = 'pseudo_time'):
+def trim_network_ss_anti(train_grn, ss_gene_sets, train_exp, train_st, trajectory_cells_dict, pseudoTime_bin, pt_col = 'pseudo_time', cluster_col = "cluster_label"):
     for temp_ss in ss_gene_sets.keys():
         temp_ss_genes = ss_gene_sets[temp_ss] # current genes 
 
@@ -172,7 +171,7 @@ def trim_network_ss_anti(train_grn, ss_gene_sets, train_exp, train_st, trajector
                     priority_gene = find_priority_gene(temp_grn_all, list(inconsist_genes.keys()))
                     # get lineage from the anti-steady state because the gene uis expressed in that lineage 
                     # find out when exact is that gene expressed in the lineage 
-                    target_st = train_st.loc[trajectory_cells_dict[anti_ss], :]
+                    target_st = train_st.loc[train_st[cluster_col].isin(trajectory_cells_dict[anti_ss]), :]
 
                     target_time_series = pd.DataFrame()
                     target_time_series.index = target_st.index
@@ -190,7 +189,7 @@ def trim_network_ss_anti(train_grn, ss_gene_sets, train_exp, train_st, trajector
                     poss_act_df = pd.DataFrame()
                     poss_act_time = list()
                     for temp_regulon in poss_act_genes:
-                        regulon_st = train_st.loc[trajectory_cells_dict[anti_ss], :]
+                        regulon_st = train_st.loc[train_st[cluster_col].isin(trajectory_cells_dict[anti_ss]), :]
 
                         regulon_time_series = pd.DataFrame()
                         regulon_time_series.index = regulon_st.index
@@ -212,7 +211,7 @@ def trim_network_ss_anti(train_grn, ss_gene_sets, train_exp, train_st, trajector
                     poss_sup_df = pd.DataFrame()
                     poss_sup_time = list()
                     for temp_regulon in poss_sup_genes:
-                        regulon_st = train_st.loc[trajectory_cells_dict[temp_ss], :]
+                        regulon_st = train_st.loc[train_st[cluster_col].isin(trajectory_cells_dict[temp_ss]), :]
 
                         regulon_time_series = pd.DataFrame()
                         regulon_time_series.index = regulon_st.index
@@ -297,22 +296,18 @@ def add_self_ss_edge(train_grn, ss_gene_sets):
             if len(genes_self_reg) == 0:
                 not_converge = False
             else:
-
-                print(temp_grn_ss)
-                print(genes_self_reg)
-
                 priority_gene = find_priority_gene(temp_grn_ss, genes_self_reg)
                 additional_df = pd.DataFrame(data = [[priority_gene, priority_gene, "+"]], columns = ['TF', 'TG', 'Type'])
                 additional_df.index = [str(priority_gene + "_" + priority_gene + "_new")]
                 train_grn = pd.concat([train_grn, additional_df])
     return train_grn 
 
-def define_ss_genes(train_exp, train_st, trajectory_cells_dict, bool_thresholds, pt_col = 'pseudoTime', n_cells = 50): 
+def define_ss_genes(train_exp, train_st, trajectory_cells_dict, bool_thresholds, pt_col = 'pseudoTime', cluster_col = 'cluster_label', n_cells = 50): 
     ss_genes_dict = dict()
     for lineage in trajectory_cells_dict.keys():
-        sub_cells = trajectory_cells_dict[lineage] 
-        sub_train_exp = train_exp.loc[:, sub_cells]
-        sub_train_st = train_st.loc[sub_cells, :]
+        sub_clusters = trajectory_cells_dict[lineage] 
+        sub_train_st = train_st.loc[train_st[cluster_col].isin(sub_clusters), :]
+        sub_train_exp = train_exp.loc[:, sub_train_st.index]
 
         sub_train_st = sub_train_st.sort_values(by = pt_col, ascending = False)
         sub_train_st = sub_train_st.iloc[0:n_cells, :]

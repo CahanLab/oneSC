@@ -41,7 +41,7 @@ def find_diff_boolean(mean_bool_df):
     return diff_bool_df
 
 # suggested some edge using average pearson correlation across different lineage 
-def edge_suggestion(TG, TFs, train_exp, trajectory_cells_dict): 
+def edge_suggestion(TG, TFs, train_exp, train_st, trajectory_cells_dict, cluster_col = 'cluster_label'): 
     
     corr_list = list()
     raw_corr_list = list()
@@ -51,8 +51,9 @@ def edge_suggestion(TG, TFs, train_exp, trajectory_cells_dict):
         temp_raw_corr = list()
 
         for trajectory_state in trajectory_cells_dict.keys():
-            trajectory_cells = trajectory_cells_dict[trajectory_state]
-            sub_train_exp = train_exp.loc[:, trajectory_cells]
+            trajectory_clusters = trajectory_cells_dict[trajectory_state]
+            sub_train_st = train_st.loc[train_st[cluster_col].isin(trajectory_clusters), :]
+            sub_train_exp = train_exp.loc[:, sub_train_st.index]
 
             TG_exp = sub_train_exp.loc[list(TG.index), :]
             TG_exp = np.array(TG_exp.iloc[0, :])
@@ -78,7 +79,6 @@ def edge_suggestion(TG, TFs, train_exp, trajectory_cells_dict):
 
     stats_tab = stats_tab.sort_values("correlation", axis = 0, ascending=False)
     return stats_tab 
-
 
 def compile_lineage_sampTab(train_exp, samp_tab, pt_col): 
     
@@ -121,7 +121,7 @@ def compile_lineage_sampTab(train_exp, samp_tab, pt_col):
     return [return_sampTab, ordered_clusters]
 
 # this is to run the wrapper of trimming using lineage 
-def lineage_trimming(orig_grn, train_exp, train_st, trajectory_cells_dict, bool_thresholds, pt_col = 'pseudoTime'):
+def lineage_trimming(orig_grn, train_exp, train_st, trajectory_cells_dict, bool_thresholds, pt_col = 'pseudoTime', cluster_col = 'cluster_label'):
     
     # calculate the threshold according to the training data 
     # bool_thresholds = find_threshold_vector(train_exp, train_st, cluster_col)
@@ -131,14 +131,13 @@ def lineage_trimming(orig_grn, train_exp, train_st, trajectory_cells_dict, bool_
 
     refined_grn_dict = dict()
     for end_state in trajectory_cells_dict.keys():
-        trajectory_cells = trajectory_cells_dict[end_state]
+        trajectory_clusters = trajectory_cells_dict[end_state]
         
-        sub_train_exp = train_exp.loc[:, trajectory_cells]
-        sub_train_st = train_st.loc[trajectory_cells, :]
-
-        trajectory_sampTab, ordered_cluster = compile_lineage_sampTab(sub_train_exp, sub_train_st, pt_col)
-
-        mean_bool_df = find_boolean_across_time(train_exp, trajectory_sampTab, 'cluster_label', ordered_cluster, bool_thresholds)
+        # shoud still take in clusters 
+        sub_train_st = train_st.loc[train_st[cluster_col].isin(trajectory_clusters), :]
+        sub_train_exp = train_exp.loc[:, sub_train_st.index]
+        
+        mean_bool_df = find_boolean_across_time(sub_train_exp, sub_train_st, cluster_col, trajectory_clusters, bool_thresholds)
         mean_diff_bool = find_diff_boolean(mean_bool_df)
         # assign the grn 
         initial_grn = orig_grn.copy()
@@ -156,6 +155,7 @@ def lineage_trimming(orig_grn, train_exp, train_st, trajectory_cells_dict, bool_
             prev_diff = prev_diff[np.setdiff1d(np.array(prev_diff.index), np.array(current_diff.index))]
 
             # if the the prev difference is 0
+            # look at the genes in the current network 
             temp_run_index =  run_index - 1
             while prev_diff.shape[0] == 0:
                 prev_diff = mean_diff_bool[temp_run_index - 1]
@@ -198,7 +198,7 @@ def lineage_trimming(orig_grn, train_exp, train_st, trajectory_cells_dict, bool_
                 else:
                     TG_series = pd.Series(current_diff.loc[temp_TG], [temp_TG])
                     
-                    edge_stats = edge_suggestion(TG_series, prev_diff, train_exp, trajectory_cells_dict)
+                    edge_stats = edge_suggestion(TG_series, prev_diff, train_exp, train_st, trajectory_cells_dict, cluster_col)
 
                     new_edge = pd.DataFrame(None, index = [str(edge_stats.iloc[0, 0] + "_" + temp_TG + "_new")], columns = ["TF", "TG", "Type"])
                     new_edge.iloc[0, 0] = edge_stats.iloc[0, 0]
