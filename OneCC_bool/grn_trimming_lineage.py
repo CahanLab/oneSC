@@ -6,12 +6,13 @@ from sklearn.mixture import GaussianMixture
 # this function is to find the threshold of the genes based on the data observation 
 # this could obviously be a little bit better 
 def find_threshold_vector(exp_df, samp_st, cluster_col = "cluster"): 
+
     cluster_exp = pd.DataFrame()
     for temp_cluster in np.unique(samp_st[cluster_col]):
         temp_st = samp_st.loc[samp_st[cluster_col] == temp_cluster, :]
         temp_exp = exp_df.loc[:, temp_st.index]
         cluster_exp[temp_cluster] = temp_exp.mean (axis = 1)
-    return (cluster_exp.max(axis = 1) - exp_df.min(axis = 1)) / 2
+    return (cluster_exp.max(axis = 1) - cluster_exp.min(axis = 1)) / 2
 
 # this is the function to booleanizering expressions across the state 
 def find_boolean_across_time(exp_df, samp_st, cluster_col, trajectory_list, bool_thresholds):

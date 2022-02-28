@@ -7,21 +7,25 @@ from .gene import *
 from .OneCC_bool_simulator import *
 from .network_structure import * 
 
-def find_best_edge(potential_senders, receiver, train_exp, train_st): 
-    return None 
+def find_inconsistent_genes(initial_ss_dict, simulated_ss_dict, threshold_dict, target_ss_genes): 
+    """Finding inconsistent genes between expected marker genes and marker genes from simulated expression profile 
 
-def find_ss_genes(train_exp, train_st, cluster_col, ss_labels):
-    # basically outputs the ss_gene_sets for each steady states
-    return None 
+    Args:
+        initial_ss_dict (dictionary): dictionary representing the boolean profile for initial steady states. Keys are gene names and values are 0 or 1
+        simulated_ss_dict (dictionary): dictionary representing the boolean profile for simulated steady states. Keys are gene names and values are 0 or 1
+        threshold_dict (dictionary): dictionary representing the threshold. Keys are gene names and values are numericals
+        target_ss_genes (list): list of genes that the simulation should express after perturbation 
 
-def find_inconsistent_genes(real_ss_dict, simulated_ss_dict, threshold_dict, ss_genes): 
+    Returns:
+        dictionary: dictionary representing genes that are still the same as initial steady state
+    """
     diff_dict = dict()
     for temp_gene in simulated_ss_dict.keys():
-        real_exp = int(real_ss_dict[temp_gene] > threshold_dict[temp_gene])
+        init_exp = int(initial_ss_dict[temp_gene] > threshold_dict[temp_gene])
         sim_exp = int(simulated_ss_dict[temp_gene] > threshold_dict[temp_gene])
-        if real_exp == sim_exp: 
-            if temp_gene not in ss_genes: # if the gene is not also expressed in target steady state
-                diff_dict[temp_gene] = real_exp
+        if init_exp == sim_exp: 
+            if temp_gene not in target_ss_genes: # if the gene is not also expressed in target steady state
+                diff_dict[temp_gene] = init_exp
     return diff_dict
 
 # find priority gene based on reachability of the network 
