@@ -2,6 +2,8 @@ import numpy as np
 import pandas as pd
 import scipy.stats
 from sklearn.mixture import GaussianMixture
+from sklearn.decomposition import PCA 
+import kneed
 
 # this function is to find the threshold of the genes based on the data observation 
 # this could obviously be a little bit better 
@@ -81,45 +83,40 @@ def edge_suggestion(TG, TFs, train_exp, train_st, trajectory_cells_dict, cluster
     stats_tab = stats_tab.sort_values("correlation", axis = 0, ascending=False)
     return stats_tab 
 
-def compile_lineage_sampTab(train_exp, samp_tab, pt_col): 
+def compile_lineage_sampTab(train_exp, n_pc = 9, selected_k = 0): 
     
-    temp_pseudo_time = samp_tab[pt_col]
-    temp_pseudo_time = temp_pseudo_time.dropna()
+    train_exp = train_exp.T
+    my_PCA = PCA()
+    my_PCA.fit(train_exp)
+
+    PCA_features = my_PCA.transform(train_exp)
+    if PCA_features.shape[1] < n_pc: 
+        n_PC = PCA_features.shape[1]
     
-    temp_train_exp = train_exp.loc[:, temp_pseudo_time.index]
-    sub_train_gmm = temp_train_exp.copy()
-    sub_train_gmm = sub_train_gmm.T
-    sub_train_gmm['pseudoTime'] = temp_pseudo_time
+    PCA_features = pd.DataFrame(PCA_features, index = train_exp.index)
+    PCA_features = PCA_features.iloc[:, 0:n_pc]
+    
     
     all_ks = list(range(2, 20))
     BIC_scores = list()
     for temp_k in all_ks: 
-        gm = GaussianMixture(n_components=temp_k, random_state=0).fit(sub_train_gmm)
-        cluster_label = gm.predict(sub_train_gmm)
-        BIC_scores.append(gm.bic(sub_train_gmm))
-        
-    selected_k = all_ks[np.argmin(BIC_scores)]
+        gm = GaussianMixture(n_components=temp_k, random_state=0).fit(PCA_features)
+        cluster_label = gm.predict(PCA_features)
+        BIC_scores.append(gm.bic(PCA_features))
     
-    gm = GaussianMixture(n_components=selected_k, random_state=0).fit(sub_train_gmm)
-    cluster_label = gm.predict(sub_train_gmm)
+    if selected_k == 0:
+        kneedle = kneed.KneeLocator(all_ks, BIC_scores, S=1.0, curve="convex", direction="decreasing")
+        selected_k = kneedle.elbow
+        
+    gm = GaussianMixture(n_components=selected_k, random_state=0).fit(PCA_features)
+    cluster_label = gm.predict(PCA_features)
     cluster_label = [str(x) + "_cluster" for x in cluster_label]
     
     return_sampTab = pd.DataFrame()
-    return_sampTab.index = sub_train_gmm.index
-    return_sampTab['cluster_label'] = cluster_label 
-    return_sampTab['pseudoTime'] = temp_pseudo_time
-    
-    temp_clusters = np.unique(return_sampTab['cluster_label'])
-    avg_pseudoTime = list()
+    return_sampTab.index = train_exp.index
+    return_sampTab['cluster_label'] = cluster_label     
 
-    for temp_cluster in temp_clusters: 
-        cluster_temp_st = return_sampTab.loc[return_sampTab['cluster_label'] == temp_cluster, :]
-        cluster_temp_pseudotime = cluster_temp_st['pseudoTime']
-        avg_pseudoTime.append(np.mean(cluster_temp_pseudotime))
-
-    ordered_clusters = temp_clusters[np.argsort(avg_pseudoTime)]
-
-    return [return_sampTab, ordered_clusters]
+    return return_sampTab
 
 # this is to run the wrapper of trimming using lineage 
 def lineage_trimming(orig_grn, train_exp, train_st, trajectory_cells_dict, bool_thresholds, pt_col = 'pseudoTime', cluster_col = 'cluster_label'):
