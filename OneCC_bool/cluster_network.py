@@ -1,6 +1,7 @@
 import networkx as nx 
 import numpy as np 
 import pandas as pd 
+import itertools
 
 def construct_cluster_network(train_exp, sampTab, initial_clusters, terminal_clusters, cluster_col = "cluster_id", pseudo_col = "pseudotime"):
     pt_list = list()
@@ -56,9 +57,13 @@ def construct_cluster_network(train_exp, sampTab, initial_clusters, terminal_clu
 def extract_lineage(clusters_G, initial_clusters, terminal_clusters): 
     clusters_lineage_dict = dict()
     i = 0 
-    for item in nx.all_simple_paths(clusters_G, initial_clusters, terminal_clusters): 
-        clusters_lineage_dict["lineage_" + str(i)] = item
-        i = i + 1
+
+    start_end_combos = itertools.product(initial_clusters, terminal_clusters)
+
+    for unique_combo in start_end_combos:
+        for item in nx.all_simple_paths(clusters_G, unique_combo[0], unique_combo[1]): 
+            clusters_lineage_dict["lineage_" + str(i)] = item
+            i = i + 1
     
     return clusters_lineage_dict
 
@@ -71,12 +76,15 @@ def extract_mutual_inhibiton(clusters_G, initial_clusters, terminal_clusters):
             for temp_edge in list(clusters_G.out_edges(temp_node)):
                 conflicting_clusters[temp_edge[1]] = list()
     
+    start_end_combos = list(itertools.product(initial_clusters, terminal_clusters))
+          
     # all the clusters in that lineage 
     for conflict_cluster in conflicting_clusters.keys():
-        for temp_lineage in list(nx.all_simple_paths(clusters_G, initial_clusters, terminal_clusters)): 
-            if conflict_cluster in temp_lineage: 
-                conflicting_clusters[conflict_cluster] = list(np.unique(conflicting_clusters[conflict_cluster] + temp_lineage))
-    
+        for unique_combo in start_end_combos:
+            for temp_lineage in list(nx.all_simple_paths(clusters_G, unique_combo[0], unique_combo[1])): 
+                if conflict_cluster in temp_lineage: 
+                    conflicting_clusters[conflict_cluster] = list(np.unique(conflicting_clusters[conflict_cluster] + temp_lineage))
+        
     return conflicting_clusters
 
 

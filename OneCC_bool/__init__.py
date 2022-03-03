@@ -6,3 +6,5 @@ from .grn_similarity import *
 from .grn_trimming_terminal import * 
 from .grn_trimming_lineage import *
 from .aux_functions import *
+
+from .cluster_network import *
