@@ -83,33 +83,24 @@ def edge_suggestion(TG, TFs, train_exp, train_st, trajectory_cells_dict, cluster
     stats_tab = stats_tab.sort_values("correlation", axis = 0, ascending=False)
     return stats_tab 
 
-def compile_lineage_sampTab(train_exp, n_pc = 9, selected_k = 0): 
+def compile_lineage_sampTab(train_exp, pt_st, pt_col = "pseudoTime", selected_k = 0): 
     
     train_exp = train_exp.T
-    my_PCA = PCA()
-    my_PCA.fit(train_exp)
-
-    PCA_features = my_PCA.transform(train_exp)
-    if PCA_features.shape[1] < n_pc: 
-        n_PC = PCA_features.shape[1]
-    
-    PCA_features = pd.DataFrame(PCA_features, index = train_exp.index)
-    PCA_features = PCA_features.iloc[:, 0:n_pc]
-    
+    train_exp['pt'] = pt_st[pt_col]
     
     all_ks = list(range(2, 20))
     BIC_scores = list()
     for temp_k in all_ks: 
-        gm = GaussianMixture(n_components=temp_k, random_state=0).fit(PCA_features)
-        cluster_label = gm.predict(PCA_features)
-        BIC_scores.append(gm.bic(PCA_features))
+        gm = GaussianMixture(n_components=temp_k, random_state=0).fit(train_exp)
+        cluster_label = gm.predict(train_exp)
+        BIC_scores.append(gm.bic(train_exp))
     
     if selected_k == 0:
         kneedle = kneed.KneeLocator(all_ks, BIC_scores, S=1.0, curve="convex", direction="decreasing")
         selected_k = kneedle.elbow
         
-    gm = GaussianMixture(n_components=selected_k, random_state=0).fit(PCA_features)
-    cluster_label = gm.predict(PCA_features)
+    gm = GaussianMixture(n_components=selected_k, random_state=0).fit(train_exp)
+    cluster_label = gm.predict(train_exp)
     cluster_label = [str(x) + "_cluster" for x in cluster_label]
     
     return_sampTab = pd.DataFrame()
