@@ -118,8 +118,103 @@ def compile_lineage_sampTab(train_exp, n_pc = 9, selected_k = 0):
 
     return return_sampTab
 
+def bin_smooth(time_series, pseudoTime_bin, smooth_style = "median", spline_ME = 0.1):
+    curr_time =  np.min(time_series['PseudoTime'])
+    time_list = list()
+    smoothed_exp = list()
+    stand_dev = list()
+
+    while curr_time < np.max(time_series['PseudoTime']): 
+        temp_time_series = time_series.loc[np.logical_and(time_series['PseudoTime'] >= curr_time, time_series['PseudoTime'] < curr_time + pseudoTime_bin), :]
+        
+        # in the case of 0 expression just move on to the next time frame and move on 
+        if temp_time_series.shape[0] == 0:
+            curr_time = curr_time + pseudoTime_bin
+            continue
+
+        time_list.append(curr_time)
+        if smooth_style == 'mean':
+            smoothed_exp.append(temp_time_series['expression'].mean())
+        elif smooth_style == "median":
+            smoothed_exp.append(temp_time_series['expression'].median())
+
+        curr_time = curr_time + pseudoTime_bin
+        stand_dev.append(temp_time_series['expression'].std())
+
+    spline_w = np.divide(1, stand_dev)
+
+    smoothed_data = pd.DataFrame()
+    smoothed_data['PseudoTime'] = time_list
+    smoothed_data['expression'] = smoothed_exp
+
+    #spline_s = smoothed_data.shape[0] * (spline_ME ** 2)
+    #spline_xy = UnivariateSpline(smoothed_data['PseudoTime'],smoothed_data['expression'], s = spline_s)
+    #moothed_data['splined_exp'] = spline_xy(smoothed_data['PseudoTime'])
+    return smoothed_data 
+
+def find_earliest_change(target_smoothed_time, thres, activation = True):
+
+    if activation == True: 
+        target_smoothed_time['activation'] = target_smoothed_time['expression'] > thres
+    else: 
+        target_smoothed_time['activation'] = target_smoothed_time['expression'] <= thres
+
+    active_target_df = target_smoothed_time.loc[target_smoothed_time['activation'] == True, :]
+    consec_num = 3
+    
+    if active_target_df.shape[0] == 0: 
+        return np.max(target_smoothed_time['PseudoTime'])
+    elif active_target_df.shape[0] < consec_num: 
+        return np.max(target_smoothed_time['PseudoTime'])
+    else: 
+        temp_time_index = active_target_df.index[0]
+        for i in range(0, len(active_target_df.index) - (consec_num - 1)): 
+            temp_time_index = active_target_df.index[i]
+            if list(range(temp_time_index, temp_time_index + consec_num)) == list(active_target_df.index[i:i+3]):
+                break
+        return active_target_df.loc[temp_time_index, "PseudoTime"]
+    
+# make a function to see if the other current moving genes would qualify to be an effector 
+
+def finding_more_activator(train_exp, train_st, pt_col, current_diff, target_gene, threshold_dict, pseudoTime_bin = 0.01): 
+    good_activator = dict()
+    
+    target_time_series = pd.DataFrame()
+    target_time_series.index = train_st.index
+    target_time_series['expression'] = train_exp.loc[target_gene, train_st.index]
+    target_time_series['PseudoTime'] = train_st[pt_col]
+
+    target_smoothed_time = bin_smooth(target_time_series, pseudoTime_bin, smooth_style = "median", spline_ME = 0.1)
+   
+    if current_diff[target_gene] == 1:
+        target_time = find_earliest_change(target_smoothed_time, threshold_dict[target_gene], activation = True)
+    else:
+        target_time = find_earliest_change(target_smoothed_time, threshold_dict[target_gene], activation = False)
+    
+    for regulator in current_diff.index:
+        if regulator == target_gene:
+            continue
+        else:
+            regulator_time_series = pd.DataFrame()
+            regulator_time_series.index = train_st.index
+            regulator_time_series['expression'] = train_exp.loc[regulator, train_st.index]
+            regulator_time_series['PseudoTime'] = train_st[pt_col]
+
+            regulator_smoothed_time = bin_smooth(regulator_time_series, pseudoTime_bin, smooth_style = "median", spline_ME = 0.1)
+        
+            if current_diff[regulator] == 1:
+                regulator_time = find_earliest_change(regulator_smoothed_time, threshold_dict[regulator], activation = True)
+            else:
+                regulator_time = find_earliest_change(regulator_smoothed_time, threshold_dict[regulator], activation = False)
+            
+            if regulator_time < (target_time + 0.02):
+                good_activator[regulator] = current_diff[regulator]
+
+    return pd.Series(good_activator) 
+
+
 # this is to run the wrapper of trimming using lineage 
-def lineage_trimming(orig_grn, train_exp, train_st, trajectory_cells_dict, bool_thresholds, pt_col = 'pseudoTime', cluster_col = 'cluster_label'):
+def lineage_trimming(orig_grn, train_exp, train_st, trajectory_cells_dict, bool_thresholds, pt_col = 'pseudoTime', cluster_col = 'cluster_label', pseudoTime_bin = 0.01):
     
     # calculate the threshold according to the training data 
     # bool_thresholds = find_threshold_vector(train_exp, train_st, cluster_col)
@@ -137,23 +232,25 @@ def lineage_trimming(orig_grn, train_exp, train_st, trajectory_cells_dict, bool_
         
         mean_bool_df = find_boolean_across_time(sub_train_exp, sub_train_st, cluster_col, trajectory_clusters, bool_thresholds)
         mean_diff_bool = find_diff_boolean(mean_bool_df)
+        
         # assign the grn 
         initial_grn = orig_grn.copy()
-
         running_list = list(range(1, mean_diff_bool.shape[1]))
         
         for run_index in running_list:
             current_diff = mean_diff_bool[run_index]
             current_diff = current_diff[current_diff != 0]
 
-            prev_diff = mean_diff_bool[run_index - 1]
-            prev_diff = prev_diff[prev_diff != 0]
-
-            # remove the genes that changed on step back 
-            prev_diff = prev_diff[np.setdiff1d(np.array(prev_diff.index), np.array(current_diff.index))]
-
             # if the the prev difference is 0
-            # look at the genes in the current network 
+            # look at the genes in the network change before the immediate previous one 
+            # this may or may not be a great solution. Remove if needed
+            # let's remove this piece of code and see what happens 
+
+            # one way to resolve this is to look way beyond all the previous transition 
+            # 1. look at the genes that were activated way before (binning and finding earliest activation)
+            # 1. look at genes that were inactivated at all...
+            # I have absolutely no fucking idea what to do with this...maybe this is an annomoly 
+            '''
             temp_run_index =  run_index - 1
             while prev_diff.shape[0] == 0:
                 prev_diff = mean_diff_bool[temp_run_index - 1]
@@ -164,8 +261,26 @@ def lineage_trimming(orig_grn, train_exp, train_st, trajectory_cells_dict, bool_
                     temp_run_index = temp_run_index - 1
                 if temp_run_index == 1:
                     break 
+            '''
 
             for temp_TG in current_diff.index:
+                prev_diff = mean_diff_bool[run_index - 1]
+                prev_diff = prev_diff[prev_diff != 0]
+
+                # remove the genes that changed on step back 
+                prev_diff = prev_diff[np.setdiff1d(np.array(prev_diff.index), np.array(current_diff.index))]
+
+                # TODO: this might be a good point to add in potential edges that occurs at the same time
+                prev_cluster = trajectory_clusters[run_index - 1]
+                current_cluster = trajectory_clusters[run_index]
+                temp_sub_train_st = sub_train_st.loc[sub_train_st[cluster_col].isin([prev_cluster, current_cluster]), :]
+                temp_sub_train_exp = sub_train_exp.loc[:, temp_sub_train_st.index]
+
+                additional_prev_diff = finding_more_activator(temp_sub_train_exp, temp_sub_train_st, pt_col, current_diff, temp_TG, bool_thresholds, pseudoTime_bin)
+                if prev_diff.shape[0] == 0:
+                    prev_diff = additional_prev_diff
+                #prev_diff = pd.concat([prev_diff, additional_prev_diff], axis = 0)
+
                 temp_grn = initial_grn.loc[initial_grn['TG'] == temp_TG, :]
 
                 # if there are edges that are not supposed to be there 
