@@ -32,9 +32,10 @@ def construct_cluster_network(train_exp, sampTab, initial_clusters, terminal_clu
             distance_df = distance_df.append(temp_dict, ignore_index = True)
 
     my_G = nx.DiGraph()
+    
     for cluster_name in mean_exp.columns:
         my_G.add_node(cluster_name)
-        
+
         # if the cluster name is the inital 
         if cluster_name not in initial_clusters:
             # no need to check incoming 
@@ -42,14 +43,16 @@ def construct_cluster_network(train_exp, sampTab, initial_clusters, terminal_clu
             if len(incoming_nodes) == 0: 
                 temp_dist = distance_df.loc[distance_df['ending'] == cluster_name, :]
                 temp_dist = temp_dist.sort_values("distance")
-                my_G.add_edges_from([(temp_dist.iloc[0, 0], cluster_name)])
+                temp_dist.index = list(range(0, temp_dist.shape[0]))
+                my_G.add_edges_from([(temp_dist.loc[0, 'starting'], cluster_name)])
                 
         if cluster_name not in terminal_clusters: 
             out_nodes = [x[1] for x in my_G.out_edges(cluster_name)]
             if len(out_nodes) == 0: 
                 temp_dist = distance_df.loc[distance_df['starting'] == cluster_name, :]
                 temp_dist = temp_dist.sort_values("distance")
-                my_G.add_edges_from([(cluster_name, temp_dist.iloc[0, 1])])
+                temp_dist.index = list(range(0, temp_dist.shape[0]))
+                my_G.add_edges_from([(cluster_name, temp_dist.loc[0, 'ending'])])
 
     return my_G 
 

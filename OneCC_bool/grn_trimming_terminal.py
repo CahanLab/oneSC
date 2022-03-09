@@ -178,9 +178,9 @@ def trim_network_ss_anti(train_grn, ss_gene_sets, train_exp, train_st, trajector
                     target_st = train_st.loc[train_st[cluster_col].isin(trajectory_cells_dict[anti_ss]), :]
 
                     target_time_series = pd.DataFrame()
-                    target_time_series.index = target_st.index
                     target_time_series['expression'] = train_exp.loc[priority_gene, target_st.index]
                     target_time_series['PseudoTime'] = target_st[pt_col]
+                    target_time_series.index = target_st.index
 
                     target_smoothed_time = bin_smooth(target_time_series, pseudoTime_bin, smooth_style = "median", spline_ME = 0.1)
                     target_act_time = find_earliest_activation(target_smoothed_time, threshold_dict[priority_gene])
@@ -196,9 +196,9 @@ def trim_network_ss_anti(train_grn, ss_gene_sets, train_exp, train_st, trajector
                         regulon_st = train_st.loc[train_st[cluster_col].isin(trajectory_cells_dict[anti_ss]), :]
 
                         regulon_time_series = pd.DataFrame()
-                        regulon_time_series.index = regulon_st.index
                         regulon_time_series['expression'] = train_exp.loc[temp_regulon, regulon_st.index]
                         regulon_time_series['PseudoTime'] = regulon_st[pt_col]
+                        regulon_time_series.index = regulon_st.index
 
                         regulon_smoothed_time = bin_smooth(regulon_time_series, pseudoTime_bin, smooth_style = "median", spline_ME = 0.1)
                         temp_regulon_act_time = find_earliest_activation(regulon_smoothed_time, threshold_dict[temp_regulon])
@@ -218,9 +218,9 @@ def trim_network_ss_anti(train_grn, ss_gene_sets, train_exp, train_st, trajector
                         regulon_st = train_st.loc[train_st[cluster_col].isin(trajectory_cells_dict[temp_ss]), :]
 
                         regulon_time_series = pd.DataFrame()
-                        regulon_time_series.index = regulon_st.index
                         regulon_time_series['expression'] = train_exp.loc[temp_regulon, regulon_st.index]
                         regulon_time_series['PseudoTime'] = regulon_st[pt_col]
+                        regulon_time_series.index = regulon_st.index
 
                         regulon_smoothed_time = bin_smooth(regulon_time_series, pseudoTime_bin, smooth_style = "median", spline_ME = 0.1)
                         temp_regulon_sup_time = find_earliest_activation(regulon_smoothed_time, threshold_dict[temp_regulon])

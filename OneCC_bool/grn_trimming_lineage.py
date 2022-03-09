@@ -171,9 +171,9 @@ def finding_more_activator(train_exp, train_st, pt_col, current_diff, target_gen
     good_activator = dict()
     
     target_time_series = pd.DataFrame()
-    target_time_series.index = train_st.index
     target_time_series['expression'] = train_exp.loc[target_gene, train_st.index]
     target_time_series['PseudoTime'] = train_st[pt_col]
+    target_time_series.index = train_st.index
 
     target_smoothed_time = bin_smooth(target_time_series, pseudoTime_bin, smooth_style = "median", spline_ME = 0.1)
    
@@ -187,9 +187,9 @@ def finding_more_activator(train_exp, train_st, pt_col, current_diff, target_gen
             continue
         else:
             regulator_time_series = pd.DataFrame()
-            regulator_time_series.index = train_st.index
             regulator_time_series['expression'] = train_exp.loc[regulator, train_st.index]
             regulator_time_series['PseudoTime'] = train_st[pt_col]
+            regulator_time_series.index = train_st.index
 
             regulator_smoothed_time = bin_smooth(regulator_time_series, pseudoTime_bin, smooth_style = "median", spline_ME = 0.1)
         
