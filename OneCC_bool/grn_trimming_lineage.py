@@ -143,6 +143,7 @@ def bin_smooth(time_series, pseudoTime_bin, smooth_style = "median", spline_ME =
     #moothed_data['splined_exp'] = spline_xy(smoothed_data['PseudoTime'])
     return smoothed_data 
 
+
 def find_earliest_change(target_smoothed_time, thres, activation = True):
 
     if activation == True: 
@@ -203,6 +204,100 @@ def finding_more_activator(train_exp, train_st, pt_col, current_diff, target_gen
 
     return pd.Series(good_activator) 
 
+
+# this function is to find time points across the dataset 
+def find_transition_time(smoothed_series, temp_gene):
+    current_status = smoothed_series.loc[0, 'boolean']
+    transition_df = pd.DataFrame(index = ['PseudoTime', 'gene', 'type'])
+    
+    lag = 5
+    # if the initial point is activated 
+    if current_status == True: 
+        transition_df = pd.concat([transition_df, pd.Series({'PseudoTime': 0, 'gene': temp_gene, 'type': '+'})], axis = 1)
+        
+    for index in smoothed_series.index[0:len(smoothed_series.index)-lag]: 
+        if smoothed_series.loc[index, 'boolean'] == current_status:
+            continue
+        else: 
+            if np.sum(smoothed_series.loc[index:index+lag, 'boolean']) == 0 or np.sum(smoothed_series.loc[index:index+lag, 'boolean']) == len(smoothed_series.loc[index:index+lag, 'boolean']):
+                if current_status == False and smoothed_series.loc[index, 'boolean'] == True: 
+                    reg_type = "+"
+                elif current_status == True and smoothed_series.loc[index, 'boolean'] == False: 
+                    reg_type = "-"
+            
+                transition_df = pd.concat([transition_df, pd.Series({'PseudoTime': smoothed_series.loc[index, 'PseudoTime'], 'gene': temp_gene, 'type': reg_type})], axis = 1)
+                current_status = smoothed_series.loc[index, 'boolean']
+    
+    transition_df = transition_df.T
+    transition_df.index = list(range(0, transition_df.shape[0]))
+  
+    return transition_df
+
+def find_time_change(train_st, train_exp, lineage_cluster_dict, cluster_col, pt_col, vector_thresh, pseudoTime_bin, lineage_name):
+    target_clusters = lineage_cluster_dict[lineage_name]
+    sub_train_st = train_st.loc[train_st[cluster_col].isin(target_clusters), :]
+    sub_train_st = sub_train_st.sort_values(pt_col)
+    sub_train_exp = train_exp.loc[:, sub_train_st.index]
+
+    activation_time_df = pd.DataFrame()
+    for temp_gene in sub_train_exp.index: 
+        time_series = pd.DataFrame()
+        time_series['expression'] = sub_train_exp.loc[temp_gene, :]
+        time_series['PseudoTime'] = train_st[pt_col]
+
+        smoothed_series = bin_smooth(time_series, pseudoTime_bin, smooth_style = "median", spline_ME = 0.1)
+        smoothed_series['boolean'] = smoothed_series['expression'] > vector_thresh[temp_gene]
+
+        temp_change_df = find_transition_time(smoothed_series, temp_gene)
+        activation_time_df = pd.concat([activation_time_df, temp_change_df])
+    
+    activation_time_df = activation_time_df.sort_values("Pseudotime")
+    activation_time_df.index = list(range(0, activation_time_df.shape[0]))
+    return activation_time_df
+
+def match_change_occurances(activation_time_df, time_frame, target_gene, potential_regulators, back_lag = 0.02):
+    activation_time_df.index = list(range(0, activation_time_df.shape[0]))
+    total_changes = np.sum(activation_time_df['gene'] == target_gene)
+
+    statistics_df = pd.DataFrame()
+
+    for temp_regulator in potential_regulators: 
+        if temp_regulator == target_gene: 
+            continue
+        subset_time_df = activation_time_df.loc[activation_time_df['gene'].isin([temp_regulator, target_gene]), :]
+        subset_time_df.index = list(range(0, subset_time_df.shape[0]))
+
+        change_index_list = list(subset_time_df.loc[subset_time_df['gene'] == target_gene, :].index)
+        stat_dict = {'regulator': temp_regulator, 'target': target_gene, 'num_change': len(change_index_list), 'pos_cor': 0, 'neg_cor': 0, 'unmatched_TF': 0, 'unmatched_TG': 0}
+
+        for change_index in change_index_list:
+            pt_range = list()
+
+            pt_range.append(subset_time_df.loc[change_index, "PseudoTime"] - time_frame)
+            pt_range.append(subset_time_df.loc[change_index, "PseudoTime"] + back_lag)
+
+            temp_subset_time_df = subset_time_df.loc[np.logical_and(subset_time_df['PseudoTime'] >= pt_range[0], subset_time_df['PseudoTime'] <= pt_range[1]), :]
+            temp_subset_time_df = temp_subset_time_df.loc[temp_subset_time_df['gene'] == temp_regulator, :]
+            temp_subset_time_df = temp_subset_time_df.sort_values("PseudoTime")
+            temp_subset_time_df.index = list(range(0, temp_subset_time_df.shape[0]))
+
+            if temp_subset_time_df.shape[0] == 0:
+                stat_dict['unmatched_TG'] = stat_dict['unmatched_TG'] + 1
+                continue 
+            else:
+                TF_shift_type = temp_subset_time_df.loc[temp_subset_time_df.shape[0] - 1, "type"]
+                TG_shift_type = subset_time_df.loc[change_index, 'type']
+
+                if TG_shift_type == TF_shift_type: 
+                    stat_dict['pos_cor'] = stat_dict['pos_cor'] + 1
+                else: 
+                    stat_dict['neg_cor'] = stat_dict['neg_cor'] + 1
+        stat_dict['unmatched_TF'] = np.sum(subset_time_df['gene'] == temp_regulator) - (stat_dict['pos_cor'] + stat_dict['neg_cor'])
+        statistics_df = pd.concat([statistics_df, pd.Series(stat_dict)], axis = 1)
+
+    statistics_df = statistics_df.T
+    statistics_df.index = list(range(0, statistics_df.shape[0]))
+    return statistics_df
 
 # this is to run the wrapper of trimming using lineage 
 def lineage_trimming(orig_grn, train_exp, train_st, trajectory_cells_dict, bool_thresholds, pt_col = 'pseudoTime', cluster_col = 'cluster_label', pseudoTime_bin = 0.01):
