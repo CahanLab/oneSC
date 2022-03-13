@@ -90,4 +90,3 @@ def extract_mutual_inhibiton(clusters_G, initial_clusters, terminal_clusters):
         
     return conflicting_clusters
 
-

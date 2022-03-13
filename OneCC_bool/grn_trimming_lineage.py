@@ -206,7 +206,6 @@ def finding_more_activator(train_exp, train_st, pt_col, current_diff, target_gen
 
     return pd.Series(good_activator) 
 
-
 # this function is to find time points across the dataset 
 def find_transition_time(smoothed_series, temp_gene):
     current_status = smoothed_series.loc[0, 'boolean']
