@@ -299,7 +299,29 @@ def match_change_occurances(activation_time_df, prev_diff, curr_diff, time_frame
                 else: 
                     stat_dict['neg_cor'] = stat_dict['neg_cor'] + 1
         stat_dict['unmatched_TF'] = np.sum(subset_time_df['gene'] == temp_regulator) - (stat_dict['pos_cor'] + stat_dict['neg_cor'])
+        
+        # this is to calculate the overall agreement between TF status and TG status 
+        TF_index_list = list(subset_time_df.loc[subset_time_df['gene'] == target_gene, :].index)
+        stat_dict['curr_pos_cor'] = 0 
+        stat_dict['curr_neg_cor'] = 0 
+
+        for TF_index in TF_index_list: 
+            cur_TF_time = subset_time_df.loc[change_index, "PseudoTime"]
+            cur_TF_status = subset_time_df.loc[change_index, "type"]
+
+            TG_prior_time = subset_time_df.loc[subset_time_df['PseudoTime'] <= (cur_TF_time + back_lag), :]
+            TG_prior_time = TG_prior_time.loc[['gene'] == target_gene, :]
+            TG_prior_time = TG_prior_time.sort_values("PseudoTime", ascending = False)
+            TG_prior_time.index = list(range(0, TG_prior_time.shape[0]))
+
+            cur_TG_status = TG_prior_time.loc[0, "type"]
+            if cur_TG_status == cur_TF_status: 
+                stat_dict['curr_pos_cor'] = stat_dict['curr_pos_cor'] + 1
+            elif cur_TG_status != cur_TF_status:
+                stat_dict['curr_neg_cor'] = stat_dict['curr_neg_cor'] + 1
+
         statistics_df = pd.concat([statistics_df, pd.Series(stat_dict)], axis = 1)
+        
 
     statistics_df = statistics_df.T
     statistics_df.index = list(range(0, statistics_df.shape[0]))
@@ -380,6 +402,7 @@ def lineage_trimming(orig_grn, train_exp, train_st, trajectory_cells_dict, bool_
         initial_grn = orig_grn.copy()
         running_list = list(range(1, mean_diff_bool.shape[1]))
 
+        
         for run_index in running_list:
             current_diff = mean_diff_bool[run_index]
             current_diff = current_diff[current_diff != 0]
@@ -459,18 +482,20 @@ def lineage_trimming(orig_grn, train_exp, train_st, trajectory_cells_dict, bool_
                             total_counts_tab[temp_column] = total_counts_tab[temp_column] + counts_tab[temp_column]
                     total_counts_tab.index = total_counts_tab['regulator'] + "_" + total_counts_tab['target'] + "_" + total_counts_tab['Type']
                     total_counts_tab['proportion'] = None 
-                    
+                    total_counts_tab['curr_proportion'] = None 
                     
                     for temp_index in total_counts_tab.index: 
                         if total_counts_tab.loc[temp_index, "Type"] == "+":
                             total_counts_tab['proportion'] = total_counts_tab['pos_cor'] / (total_counts_tab['pos_cor'] + total_counts_tab['neg_cor'] + total_counts_tab['unmatched_TG'])
+                            total_counts_tab['curr_proportion'] = total_counts_tab['curr_pos_cor'] / (total_counts_tab['curr_pos_cor'] + total_counts_tab['curr_neg_cor'])
                         else:
                             total_counts_tab['proportion'] = total_counts_tab['neg_cor'] / (total_counts_tab['pos_cor'] + total_counts_tab['neg_cor'] + total_counts_tab['unmatched_TG'])
-                    
-                total_counts_tab = total_counts_tab.loc[total_counts_tab['proportion'] == np.max(total_counts_tab['proportion']), :]
-                total_counts_tab = total_counts_tab.loc[total_counts_tab['proportion'] != 0, :]
+                            total_counts_tab['curr_proportion'] = total_counts_tab['curr_neg_cor'] / (total_counts_tab['curr_pos_cor'] + total_counts_tab['curr_neg_cor'])
 
-                total_counts_tab = total_counts_tab.loc[total_counts_tab['unmatched_TF'] == np.min(total_counts_tab['unmatched_TF']), :]
+                total_counts_tab = total_counts_tab.loc[total_counts_tab['curr_neg_cor'] == np.max(total_counts_tab['curr_neg_cor']), :]
+                total_counts_tab = total_counts_tab.loc[total_counts_tab['curr_neg_cor'] != 0, :]
+
+                total_counts_tab = total_counts_tab.loc[total_counts_tab['pos_cor'] == np.max(total_counts_tab['pos_cor']), :]
 
                 temp_edge_df = total_counts_tab.loc[:, ["regulator", "target", "Type"]]
                 temp_edge_df.columns = ['TF', 'TG', 'Type']
