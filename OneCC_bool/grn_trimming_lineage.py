@@ -1,11 +1,11 @@
-from cProfile import run
-from cgi import print_form
+from turtle import distance
 import numpy as np 
 import pandas as pd
 import scipy.stats
 from sklearn.mixture import GaussianMixture
 from sklearn.decomposition import PCA 
 import kneed
+import itertools
 
 # this function is to find the threshold of the genes based on the data observation 
 # this could obviously be a little bit better 
@@ -301,13 +301,13 @@ def match_change_occurances(activation_time_df, prev_diff, curr_diff, time_frame
         stat_dict['unmatched_TF'] = np.sum(subset_time_df['gene'] == temp_regulator) - (stat_dict['pos_cor'] + stat_dict['neg_cor'])
         
         # this is to calculate the overall agreement between TF status and TG status 
-        TF_index_list = list(subset_time_df.loc[subset_time_df['gene'] == target_gene, :].index)
+        TF_index_list = list(subset_time_df.loc[subset_time_df['gene'] == temp_regulator, :].index)
         stat_dict['curr_pos_cor'] = 0 
         stat_dict['curr_neg_cor'] = 0 
 
         for TF_index in TF_index_list: 
-            cur_TF_time = subset_time_df.loc[change_index, "PseudoTime"]
-            cur_TF_status = subset_time_df.loc[change_index, "type"]
+            cur_TF_time = subset_time_df.loc[TF_index, "PseudoTime"]
+            cur_TF_status = subset_time_df.loc[TF_index, "type"]
 
             TG_prior_time = subset_time_df.loc[subset_time_df['PseudoTime'] <= (cur_TF_time + back_lag), :]
             TG_prior_time = TG_prior_time.loc[TG_prior_time['gene'] == target_gene, :]
@@ -372,7 +372,6 @@ def new_find_diff_boolean(activation_time_df, lag_tolerance = 0.04):
         i = i + 1
         cur_index = activation_time_df.index[cur_index + sub_act_time.shape[0] - 1] + 1
     return [trans_matrix, profile_times] 
-
 
 
 # this is to run the wrapper of trimming using lineage 
@@ -493,11 +492,17 @@ def lineage_trimming(orig_grn, train_exp, train_st, trajectory_cells_dict, bool_
                         else:
                             total_counts_tab.loc[temp_index, 'proportion'] = total_counts_tab.loc[temp_index, 'neg_cor'] / (total_counts_tab.loc[temp_index, 'pos_cor'] + total_counts_tab.loc[temp_index, 'neg_cor'] + total_counts_tab.loc[temp_index, 'unmatched_TG'])
                             total_counts_tab.loc[temp_index, 'curr_proportion'] = total_counts_tab.loc[temp_index, 'curr_neg_cor'] / (total_counts_tab.loc[temp_index, 'curr_pos_cor'] + total_counts_tab.loc[temp_index, 'curr_neg_cor'])
-
+                
+                
                 total_counts_tab = total_counts_tab.loc[total_counts_tab['proportion'] == np.max(total_counts_tab['proportion']), :]
                 total_counts_tab = total_counts_tab.loc[total_counts_tab['proportion'] != 0, :]
-
                 total_counts_tab = total_counts_tab.loc[total_counts_tab['curr_proportion'] == np.max(total_counts_tab['curr_proportion']), :]
+
+                '''
+                total_counts_tab = total_counts_tab.loc[total_counts_tab['curr_proportion'] == np.max(total_counts_tab['curr_proportion']), :]
+                total_counts_tab = total_counts_tab.loc[total_counts_tab['curr_proportion'] != 0, :]
+                total_counts_tab = total_counts_tab.loc[total_counts_tab['proportion'] == np.max(total_counts_tab['proportion']), :]
+                '''
 
                 temp_edge_df = total_counts_tab.loc[:, ["regulator", "target", "Type"]]
                 temp_edge_df.columns = ['TF', 'TG', 'Type']
@@ -515,7 +520,80 @@ def lineage_trimming(orig_grn, train_exp, train_st, trajectory_cells_dict, bool_
     final_refined_df = final_refined_df.drop_duplicates()
     return final_refined_df
 
+def get_mutual_inhibiton_grn(clusters_G, train_exp, train_st, trajectory_cells_dict, bool_thresholds, pt_col = 'pseudoTime', cluster_col = 'cluster_label', pseudoTime_bin = 0.01, act_dist_tolerance = 0.1):
+    mutual_inhibition_grn = pd.DataFrame()
+    
+    # this is to find the time change of individual genes 
+    lineage_time_change_dict = dict()
+    for temp_lineage in trajectory_cells_dict.keys(): 
+        activation_time = find_genes_time_change(train_st, train_exp, trajectory_cells_dict, cluster_col, pt_col, bool_thresholds, pseudoTime_bin, temp_lineage)
+        lineage_time_change_dict[temp_lineage] = activation_time
 
+    # find the cluster that needs mutual inhibition 
+    for temp_node in clusters_G.nodes():
+        if len(list(clusters_G.out_edges(temp_node))) >= 2: 
+            
+            marker_genes_dict = dict()
+            for temp_edge in list(clusters_G.out_edges(temp_node)):
+                sub_train_st = train_st.loc[train_st[cluster_col] == temp_edge[1], :]
+                sub_train_exp = train_exp.loc[:, sub_train_st.index]
+                bool_vector = sub_train_exp.mean(axis = 1) > bool_thresholds
+                bool_vector = bool_vector[bool_vector == True]
+                marker_genes_dict[temp_edge[1]] = list(bool_vector.index)
+            
+            for curr_cluster in marker_genes_dict.keys(): 
+                curr_genes = marker_genes_dict[curr_cluster]
+                
+                for other_cluster in marker_genes_dict.keys():
+                    if other_cluster == curr_cluster: 
+                        continue
+                    other_genes = marker_genes_dict[other_cluster]
+                    intersecting_genes = np.intersect1d(curr_genes, other_genes)
+                    
+                    curr_genes = [x for x in curr_genes if x not in intersecting_genes] 
+                    other_genes = [x for x in other_genes if x not in intersecting_genes]
+                    
+                    
+                    for temp_lineage in trajectory_cells_dict.keys(): 
+                        if curr_cluster in trajectory_cells_dict[temp_lineage]:
+                            curr_activation_time = lineage_time_change_dict[temp_lineage]
+                        if other_cluster in trajectory_cells_dict[temp_lineage]:
+                            other_activation_time = lineage_time_change_dict[temp_lineage]
+                    
+                    all_combos = itertools.product(curr_genes, other_genes)
+
+                    distance_df = pd.DataFrame()
+
+                    for temp_combo in all_combos: 
+                        sub_curr_act = curr_activation_time.loc[curr_activation_time['gene'] == temp_combo[0], :]
+                        sub_other_act = other_activation_time.loc[other_activation_time['gene'] == temp_combo[1], :]
+
+                        sub_curr_act = sub_curr_act.loc[sub_curr_act['type'] == "+", :]
+                        sub_other_act = sub_other_act.loc[sub_other_act['type'] == "+", :]
+
+                        sub_curr_act = sub_curr_act.sort_values("PseudoTime")
+                        sub_other_act = sub_other_act.sort_values("PseudoTime")
+
+                        sub_curr_act.index = list(range(0, sub_curr_act.shape[0]))
+                        sub_other_act.index = list(range(0, sub_other_act.shape[0]))
+
+                        temp_distance = dict()
+                        temp_distance['gene1'] = temp_combo[0]
+                        temp_distance['gene2'] = temp_combo[1]
+                        temp_distance['distance'] = abs(sub_curr_act.loc[0, "PseudoTime"] - sub_other_act.loc[0, "PseudoTime"])
+
+                        distance_df = distance_df.append(temp_distance, ignore_index = True)
+
+                    distance_df = distance_df.sort_values("distance")
+                    distance_df.index = list(range(0, distance_df.shape[0]))
+
+                    distance_df = distance_df.loc[distance_df['distance'] <= distance_df.loc[0, "distance"] * act_dist_tolerance, :]
+
+                    for i in distance_df.index: 
+                        temp_df = pd.DataFrame(data = [[distance_df.loc[i, "gene1"], distance_df.loc[i, "gene2"], "-"], [distance_df.loc[i, "gene2"], distance_df.loc[i, "gene1"], "-"]], columns = ['TF', 'TG', 'Type'])
+                        mutual_inhibition_grn = pd.concat([mutual_inhibition_grn, temp_df])
+                    
+    return mutual_inhibition_grn.drop_duplicates()
 
 
 

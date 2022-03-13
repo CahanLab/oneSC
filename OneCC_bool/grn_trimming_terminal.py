@@ -321,36 +321,4 @@ def define_ss_genes(train_exp, train_st, trajectory_cells_dict, bool_thresholds,
 
     return ss_genes_dict
 
-def get_mutual_inhibiton_grn(clusters_G, train_exp, train_st, vector_thresh, cluster_col = "cluster_label"):
-    mutual_inhibition_grn = pd.DataFrame()
 
-    # find the cluster that needs mutual inhibition 
-    for temp_node in clusters_G.nodes():
-        if len(list(clusters_G.out_edges(temp_node))) >= 2: 
-            
-            marker_genes_dict = dict()
-            for temp_edge in list(clusters_G.out_edges(temp_node)):
-                sub_train_st = train_st.loc[train_st[cluster_col] == temp_edge[1], :]
-                sub_train_exp = train_exp.loc[:, sub_train_st.index]
-                bool_vector = sub_train_exp.mean(axis = 1) > vector_thresh
-                bool_vector = bool_vector[bool_vector == True]
-                marker_genes_dict[temp_edge[1]] = list(bool_vector.index)
-            
-            for curr_cluster in marker_genes_dict.keys(): 
-                curr_genes = marker_genes_dict[curr_cluster]
-                
-                for other_cluster in marker_genes_dict.keys():
-                    if other_cluster == curr_cluster: 
-                        continue
-                    other_genes = marker_genes_dict[other_cluster]
-                    intersecting_genes = np.intersect1d(curr_genes, other_genes)
-                    
-                    curr_genes = [x for x in curr_genes if x not in intersecting_genes] 
-                    other_genes = [x for x in other_genes if x not in intersecting_genes]
-                    
-                    for geneA in curr_genes: 
-                        for geneB in other_genes: 
-                            temp_df = pd.DataFrame(data = [[geneA, geneB, "-"]], columns = ['TF', 'TG', 'Type'])
-                            mutual_inhibition_grn = pd.concat([mutual_inhibition_grn, temp_df])
-                    
-    return mutual_inhibition_grn
