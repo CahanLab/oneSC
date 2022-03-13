@@ -310,7 +310,7 @@ def match_change_occurances(activation_time_df, prev_diff, curr_diff, time_frame
             cur_TF_status = subset_time_df.loc[change_index, "type"]
 
             TG_prior_time = subset_time_df.loc[subset_time_df['PseudoTime'] <= (cur_TF_time + back_lag), :]
-            TG_prior_time = TG_prior_time.loc[['gene'] == target_gene, :]
+            TG_prior_time = TG_prior_time.loc[TG_prior_time['gene'] == target_gene, :]
             TG_prior_time = TG_prior_time.sort_values("PseudoTime", ascending = False)
             TG_prior_time.index = list(range(0, TG_prior_time.shape[0]))
 
@@ -376,7 +376,7 @@ def new_find_diff_boolean(activation_time_df, lag_tolerance = 0.04):
 
 
 # this is to run the wrapper of trimming using lineage 
-def lineage_trimming(orig_grn, train_exp, train_st, trajectory_cells_dict, bool_thresholds, pt_col = 'pseudoTime', cluster_col = 'cluster_label', pseudoTime_bin = 0.01):
+def lineage_trimming(orig_grn, train_exp, train_st, trajectory_cells_dict, bool_thresholds, pt_col = 'pseudoTime', cluster_col = 'cluster_label', pseudoTime_bin = 0.01, tolerance_lag = 0.02, activation_lag = 0.25):
     
     # this is to find the time change of individual genes 
     lineage_time_change_dict = dict()
@@ -385,7 +385,7 @@ def lineage_trimming(orig_grn, train_exp, train_st, trajectory_cells_dict, bool_
         lineage_time_change_dict[temp_lineage] = activation_time
 
     # reindex the dataframe to clarity 
-    orig_grn.index = list(range(0, orig_grn.shape[0]))
+    orig_grn.index = orig_grn['TF'] + "_" + orig_grn['TG'] + "_" + orig_grn['Type']
 
     refined_grn_dict = dict()
     for end_state in trajectory_cells_dict.keys():
@@ -395,74 +395,76 @@ def lineage_trimming(orig_grn, train_exp, train_st, trajectory_cells_dict, bool_
         sub_train_st = train_st.loc[train_st[cluster_col].isin(trajectory_clusters), :]
         sub_train_exp = train_exp.loc[:, sub_train_st.index]
         
-        [mean_diff_bool, profile_times] = new_find_diff_boolean(lineage_time_change_dict[end_state], lag_tolerance = 0.06)
+        # [mean_diff_bool, profile_times] = new_find_diff_boolean(lineage_time_change_dict[end_state], lag_tolerance = 0.06)
 
         # try out this new 
         # assign the grn 
         initial_grn = orig_grn.copy()
-        running_list = list(range(1, mean_diff_bool.shape[1]))
-
+        # running_list = list(range(1, mean_diff_bool.shape[1]))
         
-        for run_index in running_list:
-            current_diff = mean_diff_bool[run_index]
-            current_diff = current_diff[current_diff != 0]
+        cur_activation_time_df = lineage_time_change_dict[end_state]
+        cur_activation_time_df.index = list(range(0, cur_activation_time_df.shape[0]))
 
-            # if the the prev difference is 0
-            # look at the genes in the network change before the immediate previous one 
-            # this may or may not be a great solution. Remove if needed
-            # let's remove this piece of code and see what happens 
+        cur_gene_index = 0 
+        #cur_gene_time = 0 
 
-            # one way to resolve this is to look way beyond all the previous transition 
-            # 1. look at the genes that were activated way before (binning and finding earliest activation)
-            # 1. look at genes that were inactivated at all...
-            # I have absolutely no fucking idea what to do with this...maybe this is an annomoly 
+        while cur_gene_index < cur_activation_time_df.shape[0]: 
+            
+            # assign the current time 
+            cur_gene_time = cur_activation_time_df.loc[cur_gene_index, "PseudoTime"]
 
+            sub_cur_activation_time_df = cur_activation_time_df.loc[np.logical_and(cur_activation_time_df['PseudoTime'] >= cur_gene_time, cur_activation_time_df['PseudoTime'] <= cur_gene_time + tolerance_lag), :]
+            #sub_cur_activation_time_df = sub_cur_activation_time_df.sort_values("PseudoTime", ascending = True)
+            #print(cur_gene_index)
+            #print(sub_cur_activation_time_df)
+
+            if cur_gene_index == 0: # just strat the new cycle 
+                cur_gene_index = sub_cur_activation_time_df.index[sub_cur_activation_time_df.shape[0] - 1] + 1
+                
+                continue 
+            else: 
+                current_diff_dict = dict() 
+                for i in sub_cur_activation_time_df.index: 
+                    if sub_cur_activation_time_df.loc[i, 'type'] == "+":
+                        current_diff_dict[sub_cur_activation_time_df.loc[i, 'gene']] = 1
+                    else:
+                        current_diff_dict[sub_cur_activation_time_df.loc[i, 'gene']] = -1
+                
+                current_diff = pd.Series(current_diff_dict)
+                cur_gene_index = sub_cur_activation_time_df.index[sub_cur_activation_time_df.shape[0] - 1] + 1
+
+                # get the prev_diff 
+                sub_prev_activation_time_df = cur_activation_time_df.loc[np.logical_and(cur_activation_time_df['PseudoTime'] < cur_gene_time, cur_activation_time_df['PseudoTime'] >= cur_gene_time - activation_lag), :]
+                prev_diff_dict = dict() 
+                for i in sub_prev_activation_time_df.index: 
+                    if sub_prev_activation_time_df.loc[i, 'type'] == "+":
+                        prev_diff_dict[sub_prev_activation_time_df.loc[i, 'gene']] = 1
+                    else:
+                        prev_diff_dict[sub_prev_activation_time_df.loc[i, 'gene']] = -1
+
+                prev_diff = pd.Series(prev_diff_dict)
 
             for temp_TG in current_diff.index:
-                prev_diff = mean_diff_bool[run_index - 1]
-                prev_diff = prev_diff[prev_diff != 0]
-                
-                if run_index == 1: 
-                    all_temp_gene_changes = list(mean_diff_bool.columns[mean_diff_bool.loc[temp_TG, :] != 0])
-                    all_temp_gene_changes.pop(1)
-                    all_temp_gene_changes.pop(0)
-
-                    important_TFs = list() 
-                    for temp_change in all_temp_gene_changes: 
-                        important_TFs = important_TFs + list(mean_diff_bool.index[(mean_diff_bool[temp_change - 1] != 0)])
-                    
-                    if len(important_TFs) > 0:
-                        prev_diff = prev_diff[important_TFs]
-
-                # remove the genes that changed on step back 
-                intersecting_diff = np.intersect1d(np.array(prev_diff.index), np.array(current_diff.index))
-                
-                #prev_diff = prev_diff[np.setdiff1d(np.array(prev_diff.index), intersecting_diff)]
-                prev_diff = pd.concat([prev_diff, current_diff], axis = 0)
-                prev_diff = prev_diff[np.setdiff1d(np.array(prev_diff.index), intersecting_diff)]
-                prev_diff = prev_diff[np.setdiff1d(np.array(prev_diff.index), temp_TG)]
 
                 temp_grn = initial_grn.loc[initial_grn['TG'] == temp_TG, :]
-
                 existing_TFs = np.intersect1d(temp_grn['TF'], np.array(prev_diff.index))
                 skip_loop = False
-                for existing_TF in existing_TFs: 
-                    if temp_grn.loc[np.logical_and(temp_grn['TF'] == existing_TF, temp_grn['TG'] == temp_TG), "Type"][0] == "+":
-                        # If the sign changes are consistent 
-                        if prev_diff[existing_TF] == current_diff[temp_TG]:
-                            skip_loop = True 
-                            break 
-                    elif temp_grn.loc[np.logical_and(temp_grn['TF'] == existing_TF, temp_grn['TG'] == temp_TG), "Type"][0] == "-":
-                        # if the sign changes are not the same  
-                        if prev_diff[existing_TF] != current_diff[temp_TG]:
-                            skip_loop = True 
-                            break 
+                if len(existing_TFs) > 0: 
+                    for existing_TF in existing_TFs: 
+                        if temp_grn.loc[np.logical_and(temp_grn['TF'] == existing_TF, temp_grn['TG'] == temp_TG), "Type"][0] == "+":
+                            # If the sign changes are consistent 
+                            if prev_diff[existing_TF] == current_diff[temp_TG]:
+                                skip_loop = True 
+                                break 
+                        elif temp_grn.loc[np.logical_and(temp_grn['TF'] == existing_TF, temp_grn['TG'] == temp_TG), "Type"][0] == "-":
+                            # if the sign changes are not the same  
+                            if prev_diff[existing_TF] != current_diff[temp_TG]:
+                                skip_loop = True 
+                                break 
                 
                 if skip_loop == True: 
                     continue
 
-                # TODO  this is where the shit gets weird...
-                intersecting_regs = list()
                 new_edge_df = pd.DataFrame()
 
                 total_counts_tab = pd.DataFrame()
@@ -472,12 +474,12 @@ def lineage_trimming(orig_grn, train_exp, train_st, trajectory_cells_dict, bool_
                     curr_single_diff[temp_TG] = current_diff[temp_TG]
                     curr_single_diff = pd.Series(curr_single_diff)
 
-                    counts_tab = match_change_occurances(activation_time_df, prev_diff, curr_single_diff, time_frame = profile_times[run_index] - profile_times[run_index - 1], back_lag = 0.02)
+                    counts_tab = match_change_occurances(activation_time_df, prev_diff, curr_single_diff, time_frame = activation_lag, back_lag = tolerance_lag)
                     
                     if total_counts_tab.shape[0] == 0: 
                         total_counts_tab = counts_tab
                     else: 
-                        for temp_column in ['num_change', 'pos_cor', 'neg_cor','unmatched_TF', 'unmatched_TG']:              
+                        for temp_column in ['num_change', 'pos_cor', 'neg_cor','unmatched_TF', 'unmatched_TG', 'curr_neg_cor', 'curr_pos_cor']:              
                             counts_tab.index = counts_tab['regulator'] + "_" + counts_tab['target'] + "_" + counts_tab['Type']
                             total_counts_tab[temp_column] = total_counts_tab[temp_column] + counts_tab[temp_column]
                     total_counts_tab.index = total_counts_tab['regulator'] + "_" + total_counts_tab['target'] + "_" + total_counts_tab['Type']
@@ -486,16 +488,16 @@ def lineage_trimming(orig_grn, train_exp, train_st, trajectory_cells_dict, bool_
                     
                     for temp_index in total_counts_tab.index: 
                         if total_counts_tab.loc[temp_index, "Type"] == "+":
-                            total_counts_tab['proportion'] = total_counts_tab['pos_cor'] / (total_counts_tab['pos_cor'] + total_counts_tab['neg_cor'] + total_counts_tab['unmatched_TG'])
-                            total_counts_tab['curr_proportion'] = total_counts_tab['curr_pos_cor'] / (total_counts_tab['curr_pos_cor'] + total_counts_tab['curr_neg_cor'])
+                            total_counts_tab.loc[temp_index, 'proportion'] = total_counts_tab.loc[temp_index, 'pos_cor'] / (total_counts_tab.loc[temp_index, 'pos_cor'] + total_counts_tab.loc[temp_index, 'neg_cor'] + total_counts_tab.loc[temp_index, 'unmatched_TG'])
+                            total_counts_tab.loc[temp_index, 'curr_proportion'] = total_counts_tab.loc[temp_index, 'curr_pos_cor'] / (total_counts_tab.loc[temp_index, 'curr_pos_cor'] + total_counts_tab.loc[temp_index, 'curr_neg_cor'])
                         else:
-                            total_counts_tab['proportion'] = total_counts_tab['neg_cor'] / (total_counts_tab['pos_cor'] + total_counts_tab['neg_cor'] + total_counts_tab['unmatched_TG'])
-                            total_counts_tab['curr_proportion'] = total_counts_tab['curr_neg_cor'] / (total_counts_tab['curr_pos_cor'] + total_counts_tab['curr_neg_cor'])
+                            total_counts_tab.loc[temp_index, 'proportion'] = total_counts_tab.loc[temp_index, 'neg_cor'] / (total_counts_tab.loc[temp_index, 'pos_cor'] + total_counts_tab.loc[temp_index, 'neg_cor'] + total_counts_tab.loc[temp_index, 'unmatched_TG'])
+                            total_counts_tab.loc[temp_index, 'curr_proportion'] = total_counts_tab.loc[temp_index, 'curr_neg_cor'] / (total_counts_tab.loc[temp_index, 'curr_pos_cor'] + total_counts_tab.loc[temp_index, 'curr_neg_cor'])
 
-                total_counts_tab = total_counts_tab.loc[total_counts_tab['curr_neg_cor'] == np.max(total_counts_tab['curr_neg_cor']), :]
-                total_counts_tab = total_counts_tab.loc[total_counts_tab['curr_neg_cor'] != 0, :]
+                total_counts_tab = total_counts_tab.loc[total_counts_tab['proportion'] == np.max(total_counts_tab['proportion']), :]
+                total_counts_tab = total_counts_tab.loc[total_counts_tab['proportion'] != 0, :]
 
-                total_counts_tab = total_counts_tab.loc[total_counts_tab['pos_cor'] == np.max(total_counts_tab['pos_cor']), :]
+                total_counts_tab = total_counts_tab.loc[total_counts_tab['curr_proportion'] == np.max(total_counts_tab['curr_proportion']), :]
 
                 temp_edge_df = total_counts_tab.loc[:, ["regulator", "target", "Type"]]
                 temp_edge_df.columns = ['TF', 'TG', 'Type']
