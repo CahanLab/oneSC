@@ -373,7 +373,6 @@ def new_find_diff_boolean(activation_time_df, lag_tolerance = 0.04):
         cur_index = activation_time_df.index[cur_index + sub_act_time.shape[0] - 1] + 1
     return [trans_matrix, profile_times] 
 
-
 # this is to run the wrapper of trimming using lineage 
 def lineage_trimming(orig_grn, train_exp, train_st, trajectory_cells_dict, bool_thresholds, pt_col = 'pseudoTime', cluster_col = 'cluster_label', pseudoTime_bin = 0.01, tolerance_lag = 0.02, activation_lag = 0.25):
     
@@ -473,7 +472,9 @@ def lineage_trimming(orig_grn, train_exp, train_st, trajectory_cells_dict, bool_
                     curr_single_diff[temp_TG] = current_diff[temp_TG]
                     curr_single_diff = pd.Series(curr_single_diff)
 
-                    counts_tab = match_change_occurances(activation_time_df, prev_diff, curr_single_diff, time_frame = activation_lag, back_lag = tolerance_lag)
+                    # filter out the existing edges 
+                    filtered_prev_diff = prev_diff[np.setdiff1d(prev_diff.index, temp_grn['TF'])]
+                    counts_tab = match_change_occurances(activation_time_df, filtered_prev_diff, curr_single_diff, time_frame = activation_lag, back_lag = tolerance_lag)
                     
                     if total_counts_tab.shape[0] == 0: 
                         total_counts_tab = counts_tab
@@ -481,6 +482,7 @@ def lineage_trimming(orig_grn, train_exp, train_st, trajectory_cells_dict, bool_
                         for temp_column in ['num_change', 'pos_cor', 'neg_cor','unmatched_TF', 'unmatched_TG', 'curr_neg_cor', 'curr_pos_cor']:              
                             counts_tab.index = counts_tab['regulator'] + "_" + counts_tab['target'] + "_" + counts_tab['Type']
                             total_counts_tab[temp_column] = total_counts_tab[temp_column] + counts_tab[temp_column]
+                    
                     total_counts_tab.index = total_counts_tab['regulator'] + "_" + total_counts_tab['target'] + "_" + total_counts_tab['Type']
                     total_counts_tab['proportion'] = None 
                     total_counts_tab['curr_proportion'] = None 
@@ -492,11 +494,14 @@ def lineage_trimming(orig_grn, train_exp, train_st, trajectory_cells_dict, bool_
                         else:
                             total_counts_tab.loc[temp_index, 'proportion'] = total_counts_tab.loc[temp_index, 'neg_cor'] / (total_counts_tab.loc[temp_index, 'pos_cor'] + total_counts_tab.loc[temp_index, 'neg_cor'] + total_counts_tab.loc[temp_index, 'unmatched_TG'])
                             total_counts_tab.loc[temp_index, 'curr_proportion'] = total_counts_tab.loc[temp_index, 'curr_neg_cor'] / (total_counts_tab.loc[temp_index, 'curr_pos_cor'] + total_counts_tab.loc[temp_index, 'curr_neg_cor'])
-                
-                
+
+                # remove the conflicting 
                 total_counts_tab = total_counts_tab.loc[total_counts_tab['proportion'] == np.max(total_counts_tab['proportion']), :]
                 total_counts_tab = total_counts_tab.loc[total_counts_tab['proportion'] != 0, :]
+
+                # the below option works well for BF but not BFC 
                 total_counts_tab = total_counts_tab.loc[total_counts_tab['curr_proportion'] == np.max(total_counts_tab['curr_proportion']), :]
+                total_counts_tab = total_counts_tab.loc[total_counts_tab['unmatched_TF'] == np.min(total_counts_tab['unmatched_TF']), :] # let's do this...
 
                 '''
                 total_counts_tab = total_counts_tab.loc[total_counts_tab['curr_proportion'] == np.max(total_counts_tab['curr_proportion']), :]
