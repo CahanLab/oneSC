@@ -6,6 +6,7 @@ from scipy.interpolate import UnivariateSpline
 from .gene import *
 from .OneCC_bool_simulator import *
 from .network_structure import * 
+from .grn_trimming_lineage import * 
 
 def find_inconsistent_genes(initial_ss_dict, simulated_ss_dict, threshold_dict, target_ss_genes): 
     """Finding inconsistent genes between expected marker genes and marker genes from simulated expression profile 
@@ -48,40 +49,6 @@ def find_priority_gene(temp_grn_all, gene_list):
             priority_gene = temp_gene
             curr_reachability = len(net.shortest_path(g,temp_gene))
     return priority_gene
-
-def bin_smooth(time_series, pseudoTime_bin, smooth_style = "median", spline_ME = 0.1):
-    curr_time =  np.min(time_series['PseudoTime'])
-    time_list = list()
-    smoothed_exp = list()
-    stand_dev = list()
-
-    while curr_time < np.max(time_series['PseudoTime']): 
-        temp_time_series = time_series.loc[np.logical_and(time_series['PseudoTime'] >= curr_time, time_series['PseudoTime'] < curr_time + pseudoTime_bin), :]
-        
-        # in the case of 0 expression just move on to the next time frame and move on 
-        if temp_time_series.shape[0] == 0:
-            curr_time = curr_time + pseudoTime_bin
-            continue
-
-        time_list.append(curr_time)
-        if smooth_style == 'mean':
-            smoothed_exp.append(temp_time_series['expression'].mean())
-        elif smooth_style == "median":
-            smoothed_exp.append(temp_time_series['expression'].median())
-
-        curr_time = curr_time + pseudoTime_bin
-        stand_dev.append(temp_time_series['expression'].std())
-
-    spline_w = np.divide(1, stand_dev)
-
-    smoothed_data = pd.DataFrame()
-    smoothed_data['PseudoTime'] = time_list
-    smoothed_data['expression'] = smoothed_exp
-
-    #spline_s = smoothed_data.shape[0] * (spline_ME ** 2)
-    #spline_xy = UnivariateSpline(smoothed_data['PseudoTime'],smoothed_data['expression'], s = spline_s)
-    #moothed_data['splined_exp'] = spline_xy(smoothed_data['PseudoTime'])
-    return smoothed_data 
 
 def find_earliest_activation(target_smoothed_time, thres):
     target_smoothed_time['activation'] = target_smoothed_time['expression'] > thres
@@ -321,4 +288,61 @@ def define_ss_genes(train_exp, train_st, trajectory_cells_dict, bool_thresholds,
 
     return ss_genes_dict
 
+# make sure the steady state inhibits the transition states 
+def ss_trans_inhibition(grn, ss_gene_sets, train_exp, train_st, trajectory_cells_dict, bool_thresholds, pt_col = 'pseudoTime', cluster_col = 'cluster_label', pseudoTime_bin = 0.01, tolerance_lag = 0.02, activation_lag = 0.25): 
+    agreement = False
 
+    # this is to find the time change of individual genes 
+    lineage_time_change_dict = dict()
+    for temp_lineage in trajectory_cells_dict.keys(): 
+        activation_time = find_genes_time_change(train_st, train_exp, trajectory_cells_dict, cluster_col, pt_col, bool_thresholds, pseudoTime_bin, temp_lineage)
+        lineage_time_change_dict[temp_lineage] = activation_time
+
+    modified_grn = grn.copy()
+
+    while agreement == False:
+
+
+        MyNetwork = network_structure("epoch1")
+        MyNetwork.train_dummy_grn(modified_grn)
+
+        OneCC_simulator = OneCC_bool_simulator()
+        OneCC_simulator.add_network_compilation(MyNetwork.subnet_name, MyNetwork)
+
+        exp_dict = dict()
+        for gene_name in train_exp.index: 
+            exp_dict[gene_name] = 2
+
+        TFs = np.unique(modified_grn['TF'])
+        OneCC_simulator.TFs = TFs 
+
+        perturb_dict = dict()
+        for gene_name in ss_gene_sets: 
+            perturb_dict[gene_name] = 2
+
+        OneCC_simulator.simulate_exp(exp_dict, MyNetwork.subnet_name, perturb_dict, decay_rate = 0.1, num_sim = 90000, t_interval = 0.1, stochasticity = False)
+        sim_exp = OneCC_simulator.sim_exp.copy()
+        sim_dict = sim_exp.iloc[:, -1].to_dict()
+
+        inconsist_genes = find_inconsistent_genes(exp_dict, sim_dict, bool_thresholds, ss_gene_sets)
+
+        if len(inconsist_genes) == 0: 
+            agreement = True
+        else: 
+            priority_gene = find_priority_gene(modified_grn, list(inconsist_genes.keys()))
+
+            curr_diff_dict = dict()
+            prev_diff_dict = dict() 
+
+            curr_diff_dict[priority_gene] = -1
+
+            for temp_gene in ss_gene_sets:
+                prev_diff_dict[temp_gene] = 1
+
+            curr_diff = pd.Series(curr_diff_dict)
+            prev_diff = pd.Series(prev_diff_dict)
+
+            new_edge_df = find_new_edges(modified_grn, prev_diff, curr_diff, priority_gene, lineage_time_change_dict, activation_lag, tolerance_lag)
+
+            modified_grn = pd.concat([modified_grn, new_edge_df])
+    return modified_grn
