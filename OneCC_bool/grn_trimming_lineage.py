@@ -1,4 +1,5 @@
 from turtle import distance
+from matplotlib.pyplot import subplot_mosaic
 import numpy as np 
 import pandas as pd
 import scipy.stats
@@ -111,7 +112,7 @@ def compile_lineage_sampTab(train_exp, pt_st, pt_col = "pseudoTime", selected_k 
 
     return return_sampTab
 
-def bin_smooth(time_series, pseudoTime_bin, smooth_style = "median", spline_ME = 0.1):
+def bin_smooth(time_series, pseudoTime_bin, smooth_style = "mean", spline_ME = 0.1):
     curr_time =  np.min(time_series['PseudoTime'])
     time_list = list()
     smoothed_exp = list()
@@ -235,7 +236,7 @@ def find_transition_time(smoothed_series, temp_gene):
   
     return transition_df
 
-def find_genes_time_change(train_st, train_exp, lineage_cluster_dict, cluster_col, pt_col, vector_thresh, pseudoTime_bin, lineage_name):
+def find_genes_time_change(train_st, train_exp, lineage_cluster_dict, cluster_col, pt_col, vector_thresh, pseudoTime_bin, lineage_name, smooth_style = 'mean'):
     target_clusters = lineage_cluster_dict[lineage_name]
     sub_train_st = train_st.loc[train_st[cluster_col].isin(target_clusters), :]
     sub_train_st = sub_train_st.sort_values(pt_col)
@@ -247,7 +248,7 @@ def find_genes_time_change(train_st, train_exp, lineage_cluster_dict, cluster_co
         time_series['expression'] = sub_train_exp.loc[temp_gene, :]
         time_series['PseudoTime'] = train_st[pt_col]
 
-        smoothed_series = bin_smooth(time_series, pseudoTime_bin, smooth_style = "median", spline_ME = 0.1)
+        smoothed_series = bin_smooth(time_series, pseudoTime_bin, smooth_style = smooth_style, spline_ME = 0.1)
         smoothed_series['boolean'] = smoothed_series['expression'] > vector_thresh[temp_gene]
 
         temp_change_df = find_transition_time(smoothed_series, temp_gene)
@@ -388,24 +389,25 @@ def new_find_diff_boolean(activation_time_df, lag_tolerance = 0.04):
     return [trans_matrix, profile_times] 
 
 # this is to run the wrapper of trimming using lineage 
-def lineage_trimming(orig_grn, train_exp, train_st, trajectory_cells_dict, bool_thresholds, pt_col = 'pseudoTime', cluster_col = 'cluster_label', pseudoTime_bin = 0.01, tolerance_lag = 0.02, activation_lag = 0.25):
+def lineage_trimming(orig_grn, lineage_time_change_dict, tolerance_lag = 0.02, activation_lag = 0.25):
     
+    '''
     # this is to find the time change of individual genes 
     lineage_time_change_dict = dict()
     for temp_lineage in trajectory_cells_dict.keys(): 
         activation_time = find_genes_time_change(train_st, train_exp, trajectory_cells_dict, cluster_col, pt_col, bool_thresholds, pseudoTime_bin, temp_lineage)
         lineage_time_change_dict[temp_lineage] = activation_time
-
+    '''
     # reindex the dataframe to clarity 
     orig_grn.index = orig_grn['TF'] + "_" + orig_grn['TG'] + "_" + orig_grn['Type']
 
     refined_grn_dict = dict()
-    for end_state in trajectory_cells_dict.keys():
-        trajectory_clusters = trajectory_cells_dict[end_state]
+    for end_state in lineage_time_change_dict.keys():
+        # trajectory_clusters = lineage_time_change_dict[end_state]
          
         # shoud still take in clusters 
-        sub_train_st = train_st.loc[train_st[cluster_col].isin(trajectory_clusters), :]
-        sub_train_exp = train_exp.loc[:, sub_train_st.index]
+        # sub_train_st = train_st.loc[train_st[cluster_col].isin(trajectory_clusters), :]
+        # sub_train_exp = train_exp.loc[:, sub_train_st.index]
         
         # [mean_diff_bool, profile_times] = new_find_diff_boolean(lineage_time_change_dict[end_state], lag_tolerance = 0.06)
 
@@ -415,6 +417,7 @@ def lineage_trimming(orig_grn, train_exp, train_st, trajectory_cells_dict, bool_
         # running_list = list(range(1, mean_diff_bool.shape[1]))
         
         cur_activation_time_df = lineage_time_change_dict[end_state]
+        
         cur_activation_time_df.index = list(range(0, cur_activation_time_df.shape[0]))
 
         cur_gene_index = 0 
@@ -432,7 +435,6 @@ def lineage_trimming(orig_grn, train_exp, train_st, trajectory_cells_dict, bool_
 
             if cur_gene_index == 0: # just strat the new cycle 
                 cur_gene_index = sub_cur_activation_time_df.index[sub_cur_activation_time_df.shape[0] - 1] + 1
-                
                 continue 
             else: 
                 current_diff_dict = dict() 
@@ -448,18 +450,27 @@ def lineage_trimming(orig_grn, train_exp, train_st, trajectory_cells_dict, bool_
                 # get the prev_diff 
                 sub_prev_activation_time_df = cur_activation_time_df.loc[np.logical_and(cur_activation_time_df['PseudoTime'] < cur_gene_time, cur_activation_time_df['PseudoTime'] >= cur_gene_time - activation_lag), :]
                 prev_diff_dict = dict() 
-                for i in sub_prev_activation_time_df.index: 
-                    if sub_prev_activation_time_df.loc[i, 'type'] == "+":
-                        prev_diff_dict[sub_prev_activation_time_df.loc[i, 'gene']] = 1
-                    else:
-                        prev_diff_dict[sub_prev_activation_time_df.loc[i, 'gene']] = -1
+
+                # if there are no previous potential targets, skip 
+                # TODO there has to be an elegant way of solving this. 
+                # TODO ideally if there are no previous activation, then we extend it further 
+                if sub_prev_activation_time_df.shape[0] == 0: 
+                    continue
+                else:    
+                    for i in sub_prev_activation_time_df.index: 
+                        if sub_prev_activation_time_df.loc[i, 'type'] == "+":
+                            prev_diff_dict[sub_prev_activation_time_df.loc[i, 'gene']] = 1
+                        else:
+                            prev_diff_dict[sub_prev_activation_time_df.loc[i, 'gene']] = -1
 
                 prev_diff = pd.Series(prev_diff_dict)
 
             for temp_TG in current_diff.index:
-
+                # if there are already interaction, then continue 
                 temp_grn = initial_grn.loc[initial_grn['TG'] == temp_TG, :]
-
+                common_interactions = np.intersect1d(temp_grn.index, temp_grn['TF'])
+                if len(common_interactions) != 0:
+                    continue
                 new_edge_df = find_new_edges(temp_grn, prev_diff, current_diff, temp_TG, lineage_time_change_dict, activation_lag, tolerance_lag)
                 initial_grn = pd.concat([initial_grn, new_edge_df])
 
@@ -471,6 +482,12 @@ def lineage_trimming(orig_grn, train_exp, train_st, trajectory_cells_dict, bool_
     final_refined_df = final_refined_df.drop_duplicates()
     return final_refined_df
 
+def make_lineage_time_change(train_exp, train_st, trajectory_cells_dict, cluster_col, pt_col, bool_thresholds, pseudoTime_bin, smooth_style = 'mean'):
+    lineage_time_change_dict = dict()
+    for temp_lineage in trajectory_cells_dict.keys(): 
+        activation_time = find_genes_time_change(train_st, train_exp, trajectory_cells_dict, cluster_col, pt_col, bool_thresholds, pseudoTime_bin, temp_lineage)
+        lineage_time_change_dict[temp_lineage] = activation_time
+    return lineage_time_change_dict
 
 def find_new_edges(temp_grn, prev_diff, current_diff, temp_TG, lineage_time_change_dict, activation_lag, tolerance_lag):
     skip_loop = False
@@ -504,14 +521,16 @@ def find_new_edges(temp_grn, prev_diff, current_diff, temp_TG, lineage_time_chan
 
         # filter out the existing edges 
         filtered_prev_diff = prev_diff[np.setdiff1d(prev_diff.index, temp_grn['TF'])]
+
         counts_tab = match_change_occurances(activation_time_df, filtered_prev_diff, curr_single_diff, time_frame = activation_lag, back_lag = tolerance_lag)
-        
+
         if total_counts_tab.shape[0] == 0: 
             total_counts_tab = counts_tab
         else: 
             for temp_column in ['num_change', 'pos_cor', 'neg_cor','unmatched_TF', 'unmatched_TG', 'curr_neg_cor', 'curr_pos_cor']:              
                 counts_tab.index = counts_tab['regulator'] + "_" + counts_tab['target'] + "_" + counts_tab['Type']
                 total_counts_tab[temp_column] = total_counts_tab[temp_column] + counts_tab[temp_column]
+        
         
         total_counts_tab.index = total_counts_tab['regulator'] + "_" + total_counts_tab['target'] + "_" + total_counts_tab['Type']
         total_counts_tab['proportion'] = None 
@@ -554,14 +573,18 @@ def find_new_edges(temp_grn, prev_diff, current_diff, temp_TG, lineage_time_chan
     return new_edge_df 
 
 # TODO in the function below. Also write a check point to screen for the activation time in addition to the shorest distance 
-def get_mutual_inhibiton_grn(clusters_G, train_exp, train_st, trajectory_cells_dict, bool_thresholds, pt_col = 'pseudoTime', cluster_col = 'cluster_label', pseudoTime_bin = 0.01, act_dist_tolerance = 0.1, activation_lag = 0.2, same_time_lag = 0.02):
+def get_mutual_inhibiton_grn(clusters_G, train_exp, train_st, trajectory_cells_dict, bool_thresholds, lineage_time_change_dict, cluster_col = 'cluster_label', act_dist_tolerance = 0.1, activation_lag = 0.2, same_time_lag = 0.02):
     mutual_inhibition_grn = pd.DataFrame()
     
     # this is to find the time change of individual genes 
+    '''
     lineage_time_change_dict = dict()
     for temp_lineage in trajectory_cells_dict.keys(): 
         activation_time = find_genes_time_change(train_st, train_exp, trajectory_cells_dict, cluster_col, pt_col, bool_thresholds, pseudoTime_bin, temp_lineage)
         lineage_time_change_dict[temp_lineage] = activation_time
+
+    print(lineage_time_change_dict)
+    '''
 
     # find the cluster that needs mutual inhibition 
     for temp_node in clusters_G.nodes():
@@ -598,14 +621,23 @@ def get_mutual_inhibiton_grn(clusters_G, train_exp, train_st, trajectory_cells_d
                     
                     all_combos = itertools.product(curr_genes, other_genes)
 
+                    print(curr_cluster)
+                    print(curr_genes)
+
                     distance_df = pd.DataFrame()
 
                     for temp_combo in all_combos: 
+                        
                         sub_curr_act = curr_activation_time.loc[curr_activation_time['gene'] == temp_combo[0], :]
                         sub_other_act = other_activation_time.loc[other_activation_time['gene'] == temp_combo[1], :]
 
                         sub_curr_act = sub_curr_act.loc[sub_curr_act['type'] == "+", :]
                         sub_other_act = sub_other_act.loc[sub_other_act['type'] == "+", :]
+                        
+                        # if there is no real activation of the gene 
+                        #TODO come back to this...if a gene is considered as marker gene, it shouldn't not have an activation 
+                        if sub_curr_act.shape[0] == 0 or sub_other_act.shape[0] == 0:
+                            continue
 
                         sub_curr_act = sub_curr_act.sort_values("PseudoTime")
                         sub_other_act = sub_other_act.sort_values("PseudoTime")
@@ -616,6 +648,10 @@ def get_mutual_inhibiton_grn(clusters_G, train_exp, train_st, trajectory_cells_d
                         temp_distance = dict()
                         temp_distance['gene1'] = temp_combo[0]
                         temp_distance['gene2'] = temp_combo[1]
+
+                        print(sub_curr_act)
+                        print(sub_other_act)
+                        
                         temp_distance['distance'] = abs(sub_curr_act.loc[0, "PseudoTime"] - sub_other_act.loc[0, "PseudoTime"])
 
                         distance_df = distance_df.append(temp_distance, ignore_index = True)
@@ -623,6 +659,7 @@ def get_mutual_inhibiton_grn(clusters_G, train_exp, train_st, trajectory_cells_d
                     distance_df = distance_df.sort_values("distance")
                     distance_df.index = list(range(0, distance_df.shape[0]))
                     
+                    # if the distance is not within the activation tolerance
                     distance_df = distance_df.loc[distance_df['distance'] <= distance_df.loc[0, "distance"] * (1 + act_dist_tolerance), :]
 
                     # we are making a huge assumption that the closest activating genes are mutually exclusive 
