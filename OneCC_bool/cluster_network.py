@@ -29,7 +29,7 @@ def construct_cluster_network(train_exp, sampTab, initial_clusters, terminal_clu
     for i in range(mean_exp.shape[1]):
         for j in range(i + 1, mean_exp.shape[1]):
             temp_dict = {"starting": mean_exp.columns[i], "ending": mean_exp.columns[j], "distance": np.linalg.norm(mean_exp.iloc[:, j] - mean_exp.iloc[:, i])}
-            distance_df = distance_df.append(temp_dict, ignore_index = True)
+            distance_df = pd.concat([distance_df, pd.DataFrame([temp_dict])], ignore_index = True)
 
     my_G = nx.DiGraph()
     

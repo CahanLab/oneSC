@@ -36,16 +36,17 @@ def define_transition(state_dict):
 
 def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, samp_tab, cluster_id = "leiden", pt_id = "dpt_pseudotime",act_tolerance = 0.01):
     # this is to prototype the training data required 
-    potential_regulators_dict = dict()
+    # potential_regulators_dict = dict()
     training_dict = dict()
     all_genes = transition_dict['lineage_0'].index
 
     for temp_gene in all_genes: 
 
         # get all the potential regulators 
-        potential_regulators = []
+        potential_regulators = list()
         raw_feature_matrix = pd.DataFrame()
-        
+        self_regulation_features = dict()
+
         # this is to store the bad genes 
         bad_genes_dict = dict()
 
@@ -179,16 +180,22 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
 
                 # if it is indicated that we might have to change the genes
                 if possible_feature_index in not_regulator_genes_dict.keys():
-                    # run through shit right here 
-                    
                     prev_col = temp_state.iloc[:, possible_feature_index - 1].copy()
-
                     for not_regulator_gene in not_regulator_genes_dict[possible_feature_index]:
                         cur_col[not_regulator_gene] = prev_col[not_regulator_gene]
                 
+                # this is to check the self regulation features 
+                if possible_feature_index - 1 < 0: 
+                    self_regulation_features[col_name] = cur_col[temp_gene]
+                else: 
+                    prev_col = temp_state.iloc[:, possible_feature_index - 1].copy()
+                    if prev_col[temp_gene] == 1: 
+                        self_regulation_features[col_name] = 1
+                    else: 
+                        self_regulation_features[col_name] = 0
+
                 raw_feature_matrix[col_name] = cur_col
 
-        
             bad_genes_dict[temp_lineage] = not_regulator_genes_dict    
         
         # check if the gene is expressed in the very beginning 
@@ -196,24 +203,38 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
         init_genes = transition_dict['lineage_0'].iloc[:, 0]
         init_genes = init_genes[init_genes == 1].index
         if temp_gene in init_genes: 
-            raw_feature_matrix[transition_dict['lineage_0'].columns[0]] = transition_dict['lineage_0'].iloc[:, 0].replace(-1, 0)
-        
-        potential_regulators_dict[temp_gene] = potential_regulators
+            init_state_name = transition_dict['lineage_0'].columns[0]
+            init_state = transition_dict['lineage_0'].loc[:, init_state_name].replace(-1, 0)
+            raw_feature_matrix[init_state_name] = init_state
+            self_regulation_features[init_state_name] = init_state[temp_gene]
 
+        # potential_regulators_dict[temp_gene] = potential_regulators
 
         if len(potential_regulators) == 0:
             continue
-
-        potential_regulators = potential_regulators[potential_regulators != temp_gene]
-
         training_set = dict()
-        training_set['features'] = raw_feature_matrix.loc[potential_regulators, :]
         training_set['phenotype'] = np.array(raw_feature_matrix.loc[temp_gene, :])
         training_set['bad_genes'] = bad_genes_dict
+
+        # add in the self regulation 
+        processed_feature_matrix = raw_feature_matrix.copy()
+        processed_feature_matrix.loc[temp_gene, :] = self_regulation_features
+
+        if temp_gene == 'Basp1': 
+            print(self_regulation_features)
+        for col_name in self_regulation_features.keys(): 
+            processed_feature_matrix.loc[temp_gene, col_name] = self_regulation_features[col_name]
+
+        #potential_regulators = potential_regulators[potential_regulators != temp_gene]
+        potential_regulators = list(potential_regulators)
+        potential_regulators.append(temp_gene)
+        potential_regulators = np.unique(potential_regulators)
+
+        training_set['features'] = processed_feature_matrix.loc[potential_regulators, :]
         training_dict[temp_gene] = training_set
     return training_dict
 
-def fit_data(training_dict, target_gene): 
+def GA_fit_data(training_dict, target_gene, initial_state, max_trials = 3, num_generations = 1000, num_parents_mating = 4, sol_per_pop = 10): 
     training_data = training_dict[target_gene]['features']
     training_data = training_data.loc[training_data.mean(axis = 1) > 0, :]
     training_data_original = training_data.copy()
@@ -261,8 +282,10 @@ def fit_data(training_dict, target_gene):
             return total_repression
     
     def fitness_func(solution, solution_idx):
-        predict_ans = list()
-        for state in training_data.columns: 
+        correctness_sum = 0
+
+        for i in range(0, len(training_data.columns)):
+            state = training_data.columns[i]
             norm_dict = training_data.loc[:, state]
             upTFs = training_data.index[np.array(solution) == 1]
             downTFs = training_data.index[np.array(solution) == -1]
@@ -271,16 +294,20 @@ def fit_data(training_dict, target_gene):
 
             total_prob = activation_prob * repression_prob
 
-            predict_ans.append(total_prob)
+            # give less weight to the initial state -- since initial states could have mutual inhibition that contradict the overall trend
+            # allow some room for the initial state to be contradictory. 10 initial match == 1 other match 
+            if state == initial_state: 
+                temp_score = int(total_prob == training_targets[i])
+                temp_score = temp_score * 0.1
+            else:
+                temp_score = int(total_prob == training_targets[i])
+            correctness_sum = correctness_sum + temp_score
 
-        fitness_score = np.sum(predict_ans == training_targets) + (np.sum(np.abs(solution)) * 0.001)
+        fitness_score = correctness_sum + (np.sum(np.abs(solution)) * 0.001)
         return fitness_score
     
     # the below are just parameters for the genetic algorithm     
     fitness_function = fitness_func
-    num_generations = 1000
-    num_parents_mating = 4
-    sol_per_pop = 8
     num_genes = training_data.shape[0]
 
     parent_selection_type = "sss"
@@ -301,17 +328,29 @@ def fit_data(training_dict, target_gene):
                        crossover_type=crossover_type,
                        mutation_type=mutation_type,
                        mutation_percent_genes=mutation_percent_genes, 
+                       suppress_warnings = True,
                        gene_space = [-1, 0, 1])
     ga_instance.run()
-
     solution, solution_fitness, solution_idx = ga_instance.best_solution()
-    if solution_fitness < len(training_targets): 
-        
-        print("does not fit perfectly")
-        print(target_gene)
-        print(solution_fitness)
+    
+    if initial_state in training_data.columns: 
+        perfect_fitness = training_data.shape[1] - 1 + 0.1
+    else: 
+        perfect_fitness = training_data.shape[1]
 
-    #TODO if it doesn't converge, let's do it 3 more times, if that still doesn't work then we move on with our lives 
+    if solution_fitness < perfect_fitness: 
+        print(target_gene + " does not fit perfectly")
+        print(str(solution_fitness) + "/" + str(perfect_fitness))
+
+        for i in range(0, max_trials):
+            ga_instance.run()
+            solution, solution_fitness, solution_idx = ga_instance.best_solution()
+            if solution_fitness > perfect_fitness:
+                break
+            else:
+                print(target_gene + " does not fit perfectly")
+                print(str(solution_fitness) + "/" + str(perfect_fitness))
+
     new_edges_df = pd.DataFrame()
     
     for i in range(0, training_data.shape[0]):
@@ -333,10 +372,10 @@ def fit_data(training_dict, target_gene):
     return new_edges_df
 
 # have the parameters in 
-def create_network(training_dict): 
+def create_network(training_dict, initial_state, max_trials = 3, num_generations = 1000, num_parents_mating = 4, sol_per_pop = 10): 
     total_network = pd.DataFrame()
     for temp_gene in training_dict.keys():
-        new_network = fit_data(training_dict, temp_gene)
+        new_network = GA_fit_data(training_dict, temp_gene, initial_state, max_trials, num_generations, num_parents_mating, sol_per_pop)
         total_network = pd.concat([total_network, new_network])
     return total_network
 

@@ -8,3 +8,4 @@ from .grn_trimming_lineage import *
 from .aux_functions import *
 
 from .cluster_network import *
+from .genetic_algorithm_inference import * 
