@@ -180,7 +180,7 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
             potential_regulators = np.unique(potential_regulators)
 
             # this is to extract the features for training logicistic regressor 
-            possible_feature_index = np.arange(1, temp_transition.shape[1])
+            possible_feature_index = np.arange(0, temp_transition.shape[1])
             exclude_indexes = np.setdiff1d(prev_index, cur_index) 
             
             # loop through the possible feature index list 
