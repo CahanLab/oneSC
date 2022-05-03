@@ -51,7 +51,7 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
     for temp_gene in all_genes: 
 
         # get all the potential regulators 
-        potential_regulators = list()
+        potential_regulators = list() # TODO remove the potential regulators list and remove the prev index 
         raw_feature_matrix = pd.DataFrame()
         self_regulation_features = dict()
 
@@ -96,7 +96,7 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
                 
                 # select the time series data within a range 
                 min_time = np.mean(samp_tab.loc[samp_tab[cluster_id] == cell_type_1, pt_id]) # TODO could consider median 
-                max_time = np.max(samp_tab.loc[samp_tab[cluster_id] == cell_type_2, pt_id])
+                max_time = np.max(samp_tab.loc[samp_tab[cluster_id] == cell_type_2, pt_id]) # TODO probably median might make more sense
                 
                 # get all the transition  
                 gene_transitions = temp_transition.iloc[:, temp_index].copy()
@@ -142,6 +142,7 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
                 cur_latest_time = sub_temp_time_change.loc[:, "PseudoTime"]
                 cur_latest_time = cur_latest_time[last_index] # find all the genes that changed before then
         
+                cur_potential_regulators = np.array([])
                 for temp_gene_2 in gene_transitions.index:
                     if temp_gene_2 == temp_gene: 
                         continue 
@@ -162,7 +163,7 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
                         latest_time = latest_time[0]
                         # if the change time of potential regulator is much earlier than the change time of temp_gene
                         if latest_time <= (cur_latest_time - act_tolerance):
-                            potential_regulators = np.concatenate([potential_regulators, [temp_gene_2]])   
+                            cur_potential_regulators = np.concatenate([cur_potential_regulators, [temp_gene_2]])   
                         else:
                             continue                              
                     else: 
@@ -170,11 +171,10 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
                         latest_time = sub_temp_time_change.loc[:, "PseudoTime"] 
                         latest_time = latest_time[latest_time.index[0]]
                         if latest_time <= (cur_latest_time - act_tolerance):
-                            potential_regulators = np.concatenate([potential_regulators, [temp_gene_2]])    
+                            cur_potential_regulators = np.concatenate([cur_potential_regulators, [temp_gene_2]])    
 
-                not_regulator_genes = np.setdiff1d(gene_transitions.index, potential_regulators)  
+                not_regulator_genes = np.setdiff1d(gene_transitions.index, cur_potential_regulators)  
                 not_regulator_genes = np.array(not_regulator_genes)
-
                 not_regulator_genes_dict[temp_index] = not_regulator_genes[not_regulator_genes != temp_gene]
 
             potential_regulators = np.unique(potential_regulators)
@@ -387,7 +387,7 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
         return fitness_score
 
     # the below are just parameters for the genetic algorithm     
-    fitness_function = min_features_fitness_func
+    fitness_function = max_features_fitness_func
     num_genes = training_data.shape[0]
 
     parent_selection_type = "sss"
@@ -411,37 +411,42 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
                        suppress_warnings = True,
                        gene_space = [-1, 0, 1])
     ga_instance.run()
-    min_feat_solution, min_feat_solution_fitness, min_feat_solution_idx = ga_instance.best_solution()
-    solution = min_feat_solution
+    max_feat_solution, max_feat_solution_fitness, max_feat_solution_idx = ga_instance.best_solution()
+    solution = max_feat_solution
 
     if initial_state in training_data.columns: 
         perfect_fitness = training_data.shape[1] - 1 + 0.1
     else: 
         perfect_fitness = training_data.shape[1]
     
-    if min_feat_solution_fitness < perfect_fitness: 
+    if max_feat_solution_fitness < perfect_fitness: 
         print(target_gene + " does not fit perfectly")
-        print(str(min_feat_solution_fitness) + "/" + str(perfect_fitness))
+        print(str(max_feat_solution_fitness) + "/" + str(perfect_fitness))
 
-        fitness_function = max_features_fitness_func
+        fitness_function = min_features_fitness_func
         ga_instance = pygad.GA(num_generations=num_generations,
-        num_parents_mating=num_parents_mating,
-        fitness_func=fitness_function,
-        sol_per_pop=sol_per_pop,
-        num_genes=num_genes,
-        parent_selection_type=parent_selection_type,
-        keep_parents=keep_parents,
-        crossover_type=crossover_type,
-        mutation_type=mutation_type,
-        mutation_percent_genes=mutation_percent_genes, 
-        suppress_warnings = True,
-        initial_population = ga_instance.population,
-        gene_space = [-1, 0, 1])
+                            num_parents_mating=num_parents_mating,
+                            fitness_func=fitness_function,
+                            sol_per_pop=sol_per_pop,
+                            num_genes=num_genes,
+                            parent_selection_type=parent_selection_type,
+                            keep_parents=keep_parents,
+                            crossover_type=crossover_type,
+                            mutation_type=mutation_type,
+                            mutation_percent_genes=mutation_percent_genes, 
+                            suppress_warnings = True,
+                            initial_population = ga_instance.population,
+                            gene_space = [-1, 0, 1])
 
         ga_instance.run()
-        max_feat_solution, max_feat_solution_fitness, max_feat_solution_idx = ga_instance.best_solution()
-        if max_feat_solution_fitness > min_feat_solution_fitness:
-            solution = max_feat_solution
+        min_feat_solution, min_feat_solution_fitness, min_feat_solution_idx = ga_instance.best_solution()
+
+        if min_feat_solution_fitness < perfect_fitness: 
+            print(target_gene + " does not fit perfectly")
+            print(str(min_feat_solution_fitness) + "/" + str(perfect_fitness))
+
+        if min_feat_solution_fitness > max_feat_solution_fitness:
+            solution = min_feat_solution
 
     new_edges_df = pd.DataFrame()
     
@@ -467,11 +472,35 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
 def create_network(training_dict, initial_state, selected_regulators = list(), num_generations = 1000, num_parents_mating = 4, sol_per_pop = 10): 
     total_network = pd.DataFrame()
     for temp_gene in training_dict.keys():
-        new_network = GA_fit_data(training_dict, temp_gene, initial_state, selected_regulators = selected_regulators, num_generations = num_generations, num_parents_mating = num_parents_mating, sol_per_pop = sol_per_pop)
+        new_network = GA_fit_data(training_dict, temp_gene, initial_state, selected_regulators = selected_regulators[temp_gene], num_generations = num_generations, num_parents_mating = num_parents_mating, sol_per_pop = sol_per_pop)
         total_network = pd.concat([total_network, new_network])
     return total_network
 
-
+def select_regulators_transition(transition_dict, num_prev = 2): 
+    potential_reg_dict = dict()
+    
+    for temp_lineage in transition_dict.keys(): 
+        temp_trans = transition_dict[temp_lineage]
+        for i in range(1, temp_trans.shape[1]):
+            cur_col = temp_trans.iloc[:, i]
+            
+            if i - num_prev < 0: 
+                prev_index = 0
+            else: 
+                prev_index = i - num_prev
+            prev_col = temp_trans.iloc[:, prev_index:i]
+            prev_col = np.abs(prev_col)
+            prev_col = prev_col.sum(axis = 1)
+            prev_col = prev_col[prev_col != 0]
+            cur_col = cur_col[cur_col != 0]
+            
+            for temp_gene in cur_col.index: 
+                if temp_gene in potential_reg_dict.keys(): 
+                    potential_reg_dict[temp_gene] = np.unique(np.append(potential_reg_dict[temp_gene], np.array(prev_col.index)))
+                    potential_reg_dict[temp_gene] = np.unique(np.append(potential_reg_dict[temp_gene], np.array(cur_col.index)))
+                else:
+                    potential_reg_dict[temp_gene] = np.unique(np.append(np.array(cur_col.index), np.array(prev_col.index)))
+    return potential_reg_dict
 
 
 
