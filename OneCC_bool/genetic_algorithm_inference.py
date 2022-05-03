@@ -285,13 +285,13 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
     # TODO for the future segment the generations out so that you can do them in batches     
 
     training_data = training_dict[target_gene]['features']
-    training_data = training_data.loc[training_data.sum(axis = 1) > 0, :]
-
+    
     if len(selected_regulators) > 0: 
         selected_regulators = np.append(selected_regulators, target_gene)
         selected_regulators = np.unique(selected_regulators)
         training_data = training_data.loc[selected_regulators, :]
 
+    training_data = training_data.loc[training_data.sum(axis = 1) > 0, :]
     training_data_original = training_data.copy()
     
     training_data = training_data.drop_duplicates()
@@ -358,7 +358,7 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
                 temp_score = int(total_prob == training_targets[i])
             correctness_sum = correctness_sum + temp_score
 
-        fitness_score = correctness_sum + (np.sum(np.abs(solution)) * 0.001)
+        fitness_score = correctness_sum + (np.sum(solution == 1) * 0.001) + (np.sum(solution == -1) * 0.0015) # repressor focused 
         return fitness_score
 
     def min_features_fitness_func(solution, solution_idx):
