@@ -284,7 +284,9 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
 def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators = list(), num_generations = 1000, num_parents_mating = 4, sol_per_pop = 10): 
     # TODO for the future segment the generations out so that you can do them in batches     
 
+    # TODO penalize the negative self regulation 
     training_data = training_dict[target_gene]['features']
+    training_data_original = training_data.copy()
     
     if len(selected_regulators) > 0: 
         selected_regulators = np.append(selected_regulators, target_gene)
@@ -292,22 +294,46 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
         training_data = training_data.loc[selected_regulators, :]
 
     training_data = training_data.loc[training_data.sum(axis = 1) > 0, :]
-    training_data_original = training_data.copy()
+    
     
     training_data = training_data.drop_duplicates()
     training_targets = training_dict[target_gene]['phenotype']
     feature_dict = dict()
 
+    def to_string_pattern(gene_pattern):
+        gene_pattern = [str(x) for x in gene_pattern]
+        return "_".join(gene_pattern)
+
     for regulator in training_data_original.index: 
         gene_pattern = training_data_original.loc[regulator, :]
-        gene_pattern = np.array(gene_pattern)
-        gene_pattern = [str(x) for x in gene_pattern]
-        x_str = "_".join(gene_pattern)
+        x_str = to_string_pattern(gene_pattern)
+
         if x_str in feature_dict.keys():
             feature_dict[x_str] = np.concatenate([feature_dict[x_str], [regulator]])
         else:
             feature_dict[x_str] = np.array([regulator])
-            
+    
+    # rename the training data 
+    training_data.index = training_data.apply(to_string_pattern, axis = 1)
+
+    target_gene_pattern = to_string_pattern(training_data_original.loc[target_gene, :])
+
+    if target_gene_pattern in training_data.index:
+        # if the self regulation pattern match with 
+        if len(feature_dict[target_gene_pattern]) > 0: # if the there are more than at least 1 other gene pattern that is the same as the self regulation
+            feature_dict[target_gene_pattern] = feature_dict[target_gene_pattern][feature_dict[target_gene_pattern] != target_gene]
+            feature_dict[target_gene + "_" + target_gene_pattern] = [target_gene]
+            target_gene_df = training_data_original.loc[target_gene, :].to_frame().T
+            target_gene_df.index = [target_gene + "_" + target_gene_pattern]
+            training_data = pd.concat([training_data, target_gene_df])
+        else:
+            feature_dict.pop(target_gene_pattern)
+            feature_dict[target_gene + "_" + target_gene_pattern] = [target_gene]
+            training_data = training_data.rename(index={target_gene_pattern:target_gene + "_" + target_gene_pattern})
+        # find where the index of self regulation
+        self_reg_index = np.where(training_data.index == target_gene + "_" + target_gene_pattern)[0][0]
+    else:
+        self_reg_index = -1 
     def calc_activation_prob(norm_dict, upTFs): 
         if len(upTFs) == 0: 
             return 1
@@ -359,6 +385,9 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
             correctness_sum = correctness_sum + temp_score
 
         fitness_score = correctness_sum + (np.sum(solution == 1) * 0.001) + (np.sum(solution == -1) * 0.0015) # repressor focused 
+        if self_reg_index > -1:
+            if solution[self_reg_index] == -1:
+                fitness_score = fitness_score - 2
         return fitness_score
 
     def min_features_fitness_func(solution, solution_idx):
@@ -384,6 +413,9 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
             correctness_sum = correctness_sum + temp_score
 
         fitness_score = correctness_sum + (np.sum(np.array(solution) == 0) * 0.001)
+        if self_reg_index > -1:
+            if solution[self_reg_index] == -1:
+                fitness_score = fitness_score - 2
         return fitness_score
 
     # the below are just parameters for the genetic algorithm     
@@ -453,9 +485,8 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
     for i in range(0, training_data.shape[0]):
         if solution[i] == 0:
             continue
-        gene_pattern = np.array(training_data.iloc[i, :])
-        gene_pattern = [str(x) for x in gene_pattern]
-        x_str = "_".join(gene_pattern)
+
+        x_str = training_data.index[i]
 
         if solution[i] == -1: 
             reg_type = "-"
