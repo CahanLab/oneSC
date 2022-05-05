@@ -215,48 +215,10 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
                         else:
                             self_regulation_features[col_name] = 0
                 
-                # NOTE the code to futher finner tune the initial state for training is kind of funky 
-                # TODO it has failed pretty badly. I don't think there is a point of doing this...i will let others continue to explore this real I suppose 
-                '''
-                if possible_feature_index == 0: 
-                    print(temp_gene)
-                    if cur_col[temp_gene] == 0:
-                        temp_sign = "-"
-                    else:
-                        temp_sign = "+"
-                    earliest_time_change_df = temp_time_change.loc[np.logical_and(temp_time_change['gene'] == temp_gene, temp_time_change['type'] == temp_sign), :]
-                    earliest_time_change_df = earliest_time_change_df.sort_values('PseudoTime')
-                    earliest_time_change_df.index = np.arange(0, earliest_time_change_df.shape[0])
-                    earliest_time_change = earliest_time_change_df.loc[0, 'PseudoTime']
-                    
-                    if earliest_time_change > 0: 
-                        sub_time_change_df = temp_time_change.loc[np.logical_or(temp_time_change['PseudoTime'] <= (earliest_time_change - act_tolerance), temp_time_change['PseudoTime'] == 0), :]
-                        sub_time_change_df = sub_time_change_df.sort_values('PseudoTime')
-                        sub_time_change_df.index = np.arange(0, sub_time_change_df.shape[0])
-                        sub_time_change_df = sub_time_change_df.loc[sub_time_change_df['gene'] != temp_gene, :] # remove all teh changes before hand 
-
-                        for i in sub_time_change_df.index:
-                            if sub_time_change_df.loc[i, "type"] == "+":
-                                cur_col[sub_time_change_df.loc[i, "gene"]] = 1
-                            elif sub_time_change_df.loc[i, "type"] == "-":
-                                cur_col[sub_time_change_df.loc[i, "gene"]] = 0
-                '''
                 raw_feature_matrix[col_name] = cur_col
 
             bad_genes_dict[temp_lineage] = not_regulator_genes_dict    
         
-        # TODO maybe make it not not be hardcoded by 'lineage_0'
-        # TODO There is no point for this 
-        '''
-        init_genes = transition_dict['lineage_0'].iloc[:, 0]
-        init_genes = init_genes[init_genes == 1].index
-        if temp_gene in init_genes: 
-            init_state_name = transition_dict['lineage_0'].columns[0]
-            init_state = transition_dict['lineage_0'].loc[:, init_state_name].replace(-1, 0)
-            raw_feature_matrix[init_state_name] = init_state
-            self_regulation_features[init_state_name] = init_state[temp_gene]
-        '''
-
         if len(potential_regulators) == 0:
             continue
         training_set = dict()
