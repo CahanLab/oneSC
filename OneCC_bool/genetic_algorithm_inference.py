@@ -66,15 +66,16 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
             temp_time_change = lineage_time_change_dict[temp_lineage] # time series 
             
             # find the index of the state before transition of temp_gene 
-            prev_index = np.where(temp_transition.loc[temp_gene, :] != 0)[0] - 1
-            prev_index = prev_index[prev_index > -1]
+            prev_index_list = np.where(temp_transition.loc[temp_gene, :] != 0)[0] - 1
+            prev_index_list = prev_index_list[prev_index_list > -1]
             
             # find the index of transition of temp_gene 
-            cur_index = np.where(temp_transition.loc[temp_gene, :] != 0)[0]
-            cur_index = cur_index[cur_index > 0]
+            cur_index_list = np.where(temp_transition.loc[temp_gene, :] != 0)[0]
+            cur_index_list = cur_index_list[cur_index_list > 0]
             
             # all the genes that changed in right before temp_gene transition gets logged 
-            for temp_index in prev_index: 
+            # TODO remove anything related to potential_regulators 
+            for temp_index in prev_index_list: 
                 gene_transitions = temp_transition.iloc[:, temp_index].copy()
                 gene_transitions_2 = temp_transition.iloc[:, temp_index + 1].copy()
                 
@@ -90,7 +91,7 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
             not_regulator_genes_dict = dict()
 
             # select the appropriate genes that change with the temp_gene 
-            for temp_index in cur_index: 
+            for temp_index in cur_index_list: 
                 cell_type_1 = temp_transition.columns[temp_index - 1]
                 cell_type_2 = temp_transition.columns[temp_index]
                 
@@ -180,11 +181,11 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
             potential_regulators = np.unique(potential_regulators)
 
             # this is to extract the features for training logicistic regressor 
-            possible_feature_index = np.arange(0, temp_transition.shape[1])
-            exclude_indexes = np.setdiff1d(prev_index, cur_index) 
+            possible_feature_index_list = np.arange(0, temp_transition.shape[1])
+            exclude_indexes = np.setdiff1d(prev_index_list, cur_index_list) 
             
             # loop through the possible feature index list 
-            possible_feature_index_list = np.setdiff1d(possible_feature_index, exclude_indexes) 
+            possible_feature_index_list = np.setdiff1d(possible_feature_index_list, exclude_indexes) 
             
             for possible_feature_index in possible_feature_index_list:
                 col_name = temp_state.columns[possible_feature_index]
@@ -197,21 +198,56 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
                         cur_col[not_regulator_gene] = prev_col[not_regulator_gene]
                 
                 # this is to check the self regulation features 
+                # this is to add in self-regulation 
+                # NOTE: this part of the code is to add in the self-regulatory features 
                 if possible_feature_index - 1 < 0: 
                     self_regulation_features[col_name] = cur_col[temp_gene]
                 else: 
                     prev_col = temp_state.iloc[:, possible_feature_index - 1].copy()
                     if prev_col[temp_gene] == 1: 
                         self_regulation_features[col_name] = 1
-                    else: 
-                        self_regulation_features[col_name] = 0
+                    else:
+                        if temp_state.columns[possible_feature_index - 1] in self_regulation_features.keys():
+                            if self_regulation_features[temp_state.columns[possible_feature_index - 1]] == 1: 
+                                self_regulation_features[col_name] = 1
+                            else:
+                                self_regulation_features[col_name] = 0
+                        else:
+                            self_regulation_features[col_name] = 0
+                
+                # NOTE the code to futher finner tune the initial state for training is kind of funky 
+                # TODO it has failed pretty badly. I don't think there is a point of doing this...i will let others continue to explore this real I suppose 
+                '''
+                if possible_feature_index == 0: 
+                    print(temp_gene)
+                    if cur_col[temp_gene] == 0:
+                        temp_sign = "-"
+                    else:
+                        temp_sign = "+"
+                    earliest_time_change_df = temp_time_change.loc[np.logical_and(temp_time_change['gene'] == temp_gene, temp_time_change['type'] == temp_sign), :]
+                    earliest_time_change_df = earliest_time_change_df.sort_values('PseudoTime')
+                    earliest_time_change_df.index = np.arange(0, earliest_time_change_df.shape[0])
+                    earliest_time_change = earliest_time_change_df.loc[0, 'PseudoTime']
+                    
+                    if earliest_time_change > 0: 
+                        sub_time_change_df = temp_time_change.loc[np.logical_or(temp_time_change['PseudoTime'] <= (earliest_time_change - act_tolerance), temp_time_change['PseudoTime'] == 0), :]
+                        sub_time_change_df = sub_time_change_df.sort_values('PseudoTime')
+                        sub_time_change_df.index = np.arange(0, sub_time_change_df.shape[0])
+                        sub_time_change_df = sub_time_change_df.loc[sub_time_change_df['gene'] != temp_gene, :] # remove all teh changes before hand 
 
+                        for i in sub_time_change_df.index:
+                            if sub_time_change_df.loc[i, "type"] == "+":
+                                cur_col[sub_time_change_df.loc[i, "gene"]] = 1
+                            elif sub_time_change_df.loc[i, "type"] == "-":
+                                cur_col[sub_time_change_df.loc[i, "gene"]] = 0
+                '''
                 raw_feature_matrix[col_name] = cur_col
 
             bad_genes_dict[temp_lineage] = not_regulator_genes_dict    
         
-        # check if the gene is expressed in the very beginning 
         # TODO maybe make it not not be hardcoded by 'lineage_0'
+        # TODO There is no point for this 
+        '''
         init_genes = transition_dict['lineage_0'].iloc[:, 0]
         init_genes = init_genes[init_genes == 1].index
         if temp_gene in init_genes: 
@@ -219,6 +255,7 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
             init_state = transition_dict['lineage_0'].loc[:, init_state_name].replace(-1, 0)
             raw_feature_matrix[init_state_name] = init_state
             self_regulation_features[init_state_name] = init_state[temp_gene]
+        '''
 
         if len(potential_regulators) == 0:
             continue
@@ -228,7 +265,8 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
 
         # add in the self regulation 
         processed_feature_matrix = raw_feature_matrix.copy()
-        processed_feature_matrix.loc[temp_gene, :] = self_regulation_features
+        for temp_col in processed_feature_matrix.columns:
+            processed_feature_matrix.loc[temp_gene, temp_col] = self_regulation_features[temp_col]
 
         #potential_regulators = potential_regulators[potential_regulators != temp_gene]
         potential_regulators = list(potential_regulators)
@@ -284,17 +322,15 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
 def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators = list(), num_generations = 1000, num_parents_mating = 4, sol_per_pop = 10): 
     # TODO for the future segment the generations out so that you can do them in batches     
 
-    # TODO penalize the negative self regulation 
     training_data = training_dict[target_gene]['features']
     training_data_original = training_data.copy()
-    
+
     if len(selected_regulators) > 0: 
         selected_regulators = np.append(selected_regulators, target_gene)
         selected_regulators = np.unique(selected_regulators)
         training_data = training_data.loc[selected_regulators, :]
 
     training_data = training_data.loc[training_data.sum(axis = 1) > 0, :]
-    
     
     training_data = training_data.drop_duplicates()
     training_targets = training_dict[target_gene]['phenotype']
@@ -315,12 +351,11 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
     
     # rename the training data 
     training_data.index = training_data.apply(to_string_pattern, axis = 1)
-
     target_gene_pattern = to_string_pattern(training_data_original.loc[target_gene, :])
 
     if target_gene_pattern in training_data.index:
         # if the self regulation pattern match with 
-        if len(feature_dict[target_gene_pattern]) > 0: # if the there are more than at least 1 other gene pattern that is the same as the self regulation
+        if len(feature_dict[target_gene_pattern]) > 1: # if the there are more than at least 1 other gene pattern that is the same as the self regulation
             feature_dict[target_gene_pattern] = feature_dict[target_gene_pattern][feature_dict[target_gene_pattern] != target_gene]
             feature_dict[target_gene + "_" + target_gene_pattern] = [target_gene]
             target_gene_df = training_data_original.loc[target_gene, :].to_frame().T
@@ -334,6 +369,7 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
         self_reg_index = np.where(training_data.index == target_gene + "_" + target_gene_pattern)[0][0]
     else:
         self_reg_index = -1 
+
     def calc_activation_prob(norm_dict, upTFs): 
         if len(upTFs) == 0: 
             return 1
@@ -379,15 +415,20 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
             # allow some room for the initial state to be contradictory. 10 initial match == 1 other match 
             if state == initial_state: 
                 temp_score = int(total_prob == training_targets[i])
-                temp_score = temp_score * 0.1
+                temp_score = temp_score * 500
             else:
-                temp_score = int(total_prob == training_targets[i])
-            correctness_sum = correctness_sum + temp_score
+                temp_score = int(total_prob == training_targets[i]) * 1000
 
-        fitness_score = correctness_sum + (np.sum(solution == 1) * 0.001) + (np.sum(solution == -1) * 0.0015) # repressor focused 
+            correctness_sum = correctness_sum + temp_score
+        fitness_score = correctness_sum + (np.sum(solution == 1) * 1) + (np.sum(solution == -1) * 1.5) # if a gene can be either activator or inhibitor, choose inhibitor
+
+        # peanlize the crap out of self inhibiton 
         if self_reg_index > -1:
             if solution[self_reg_index] == -1:
-                fitness_score = fitness_score - 2
+                fitness_score = fitness_score - 2000
+        
+        # if it comes to non-reactive and reactive, pick the reactive gene 
+        fitness_score = fitness_score + np.sum(training_data.loc[np.array(solution) != 0, :].sum()) * 0.01
         return fitness_score
 
     def min_features_fitness_func(solution, solution_idx):
@@ -407,23 +448,26 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
             # allow some room for the initial state to be contradictory. 10 initial match == 1 other match 
             if state == initial_state: 
                 temp_score = int(total_prob == training_targets[i])
-                temp_score = temp_score * 0.1
+                temp_score = temp_score * 500
             else:
-                temp_score = int(total_prob == training_targets[i])
+                temp_score = int(total_prob == training_targets[i]) * 1000
             correctness_sum = correctness_sum + temp_score
 
-        fitness_score = correctness_sum + (np.sum(np.array(solution) == 0) * 0.001)
+        fitness_score = correctness_sum + (np.sum(np.array(solution) == 0) * 1) 
         if self_reg_index > -1:
             if solution[self_reg_index] == -1:
-                fitness_score = fitness_score - 2
+                fitness_score = fitness_score - 2000
+
+        fitness_score = fitness_score + np.sum(training_data.loc[np.array(solution) != 0, :].sum()) * 0.01 # favor genes that have a lot of activation across 
+        fitness_score = fitness_score + (np.sum(np.array(solution) == -1) * 0.01)  # favor genes that are inhibitory 
         return fitness_score
 
     # the below are just parameters for the genetic algorithm     
-    fitness_function = max_features_fitness_func
+    fitness_function = min_features_fitness_func
     num_genes = training_data.shape[0]
 
     parent_selection_type = "sss"
-    keep_parents = 4
+    keep_parents = 2
     crossover_type = "uniform"
     
     mutation_type = "adaptive"
@@ -443,19 +487,19 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
                        suppress_warnings = True,
                        gene_space = [-1, 0, 1])
     ga_instance.run()
-    max_feat_solution, max_feat_solution_fitness, max_feat_solution_idx = ga_instance.best_solution()
-    solution = max_feat_solution
+    first_solution, first_solution_fitness, first_solution_idx = ga_instance.best_solution()
+    solution = first_solution
 
     if initial_state in training_data.columns: 
-        perfect_fitness = training_data.shape[1] - 1 + 0.1
+        perfect_fitness = (training_data.shape[1] - 1) * 1000 + 500
     else: 
-        perfect_fitness = training_data.shape[1]
+        perfect_fitness = training_data.shape[1] * 1000
     
-    if max_feat_solution_fitness < perfect_fitness: 
+    if first_solution_fitness < perfect_fitness: 
         print(target_gene + " does not fit perfectly")
-        print(str(max_feat_solution_fitness) + "/" + str(perfect_fitness))
+        print(str(first_solution_fitness) + "/" + str(perfect_fitness))
 
-        fitness_function = min_features_fitness_func
+        fitness_function = max_features_fitness_func
         ga_instance = pygad.GA(num_generations=num_generations,
                             num_parents_mating=num_parents_mating,
                             fitness_func=fitness_function,
@@ -471,14 +515,15 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
                             gene_space = [-1, 0, 1])
 
         ga_instance.run()
-        min_feat_solution, min_feat_solution_fitness, min_feat_solution_idx = ga_instance.best_solution()
+        second_solution, second_solution_fitness, second_solution_idx = ga_instance.best_solution()
 
-        if min_feat_solution_fitness < perfect_fitness: 
+        if second_solution_fitness < perfect_fitness: 
             print(target_gene + " does not fit perfectly")
-            print(str(min_feat_solution_fitness) + "/" + str(perfect_fitness))
+            print(str(second_solution_fitness) + "/" + str(perfect_fitness))
 
-        if min_feat_solution_fitness > max_feat_solution_fitness:
-            solution = min_feat_solution
+            if second_solution_fitness > first_solution_fitness:
+                solution = second_solution
+        
 
     new_edges_df = pd.DataFrame()
     
@@ -500,10 +545,14 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
     return new_edges_df
 
 # have the parameters in 
-def create_network(training_dict, initial_state, selected_regulators = list(), num_generations = 1000, num_parents_mating = 4, sol_per_pop = 10): 
+def create_network(training_dict, initial_state, selected_regulators_dict = dict(), num_generations = 1000, num_parents_mating = 4, sol_per_pop = 10): 
     total_network = pd.DataFrame()
     for temp_gene in training_dict.keys():
-        new_network = GA_fit_data(training_dict, temp_gene, initial_state, selected_regulators = selected_regulators[temp_gene], num_generations = num_generations, num_parents_mating = num_parents_mating, sol_per_pop = sol_per_pop)
+        print("start fitting " + temp_gene )
+        if temp_gene in selected_regulators_dict.keys():
+            new_network = GA_fit_data(training_dict, temp_gene, initial_state, selected_regulators = selected_regulators_dict[temp_gene], num_generations = num_generations, num_parents_mating = num_parents_mating, sol_per_pop = sol_per_pop)
+        else:
+            new_network = GA_fit_data(training_dict, temp_gene, initial_state, selected_regulators = list(), num_generations = num_generations, num_parents_mating = num_parents_mating, sol_per_pop = sol_per_pop)
         total_network = pd.concat([total_network, new_network])
     return total_network
 
@@ -533,6 +582,22 @@ def select_regulators_transition(transition_dict, num_prev = 2):
                     potential_reg_dict[temp_gene] = np.unique(np.append(np.array(cur_col.index), np.array(prev_col.index)))
     return potential_reg_dict
 
+def select_regulators_time_series(lineage_time_change_dict, activation_window = 0.25, lag = 0.02): 
+    potential_reg_dict = dict()
+    for temp_lineage in lineage_time_change_dict.keys(): 
+        full_df = lineage_time_change_dict[temp_lineage].copy()
+        partial_df = lineage_time_change_dict[temp_lineage].copy()
+        partial_df = partial_df.loc[partial_df['PseudoTime'] > lag, :]
+        
+        for idx in partial_df.index: 
+            sub_df = full_df.loc[np.logical_and(full_df['PseudoTime'] >= partial_df.loc[idx, 'PseudoTime'] - activation_window, full_df['PseudoTime'] < partial_df.loc[idx, 'PseudoTime'] - lag), :]
+            temp_gene = partial_df.loc[idx, 'gene']
+            if temp_gene in potential_reg_dict.keys(): 
+                potential_reg_dict[temp_gene] = np.append(potential_reg_dict[temp_gene], sub_df['gene'])
+                potential_reg_dict[temp_gene] = np.unique(potential_reg_dict[temp_gene])
+            else:
+                potential_reg_dict[temp_gene] = np.unique(sub_df['gene'])
+    return potential_reg_dict
 
 
 
