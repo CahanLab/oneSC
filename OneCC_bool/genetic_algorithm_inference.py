@@ -281,7 +281,7 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
         training_dict[temp_gene] = training_set
     return training_dict
 
-def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators = list(), num_generations = 1000, num_parents_mating = 4, sol_per_pop = 10): 
+def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators = list(), num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, max_alt_inhibtors = 2): 
     # TODO for the future segment the generations out so that you can do them in batches     
 
     training_data = training_dict[target_gene]['features']
@@ -408,20 +408,33 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
 
             # give less weight to the initial state -- since initial states could have mutual inhibition that contradict the overall trend
             # allow some room for the initial state to be contradictory. 10 initial match == 1 other match 
+            
+            correct_scale = 1000
+            num_gene_scale = 10
+            inhibitor_bonus_scale = 1
+            activated_bonus_scale = 0.001
+
             if state == initial_state: 
                 temp_score = int(total_prob == training_targets[i])
-                temp_score = temp_score * 500
+                temp_score = temp_score * (correct_scale/2)
             else:
-                temp_score = int(total_prob == training_targets[i]) * 1000
+                temp_score = int(total_prob == training_targets[i]) * correct_scale
             correctness_sum = correctness_sum + temp_score
 
-        fitness_score = correctness_sum + (np.sum(np.array(solution) == 0) * 1) 
+        fitness_score = correctness_sum + (np.sum(np.array(solution) == 0) * num_gene_scale) # minimizes the number of genes 
+        fitness_score = fitness_score + (np.sum(np.array(solution) == -1) * inhibitor_bonus_scale)  # favor genes that are inhibitory 
+
+        # NOTE the code adds one additional edge that do not interfere with reachability
+        fitness_score = fitness_score + min(np.sum(np.array(solution) == -1) * num_gene_scale, max_alt_inhibtors * num_gene_scale)
+        fitness_score = fitness_score + np.sum(training_data.loc[np.array(solution) == 1, :].sum()) * activated_bonus_scale # favor genes that have a lot of activation across 
+
+        # penalize the self inhibitors
         if self_reg_index > -1:
             if solution[self_reg_index] == -1:
-                fitness_score = fitness_score - 2000
+                fitness_score = fitness_score - (3 * correct_scale)
 
-        fitness_score = fitness_score + np.sum(training_data.loc[np.array(solution) != 0, :].sum()) * 0.01 # favor genes that have a lot of activation across 
-        fitness_score = fitness_score + (np.sum(np.array(solution) == -1) * 0.01)  # favor genes that are inhibitory 
+
+        #TODO hand-wavy method of controlling for the number of 
         return fitness_score
 
     # the below are just parameters for the genetic algorithm     
@@ -435,6 +448,11 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
     mutation_type = "adaptive"
     #mutation_percent_genes = 20
     mutation_percent_genes = [40, 10] # maybe try to use number of genes as 
+
+    if initial_state in training_data.columns: 
+        perfect_fitness = (training_data.shape[1] - 1) * 1000 + 500
+    else: 
+        perfect_fitness = training_data.shape[1] * 1000
 
     ga_instance = pygad.GA(num_generations=num_generations,
                        num_parents_mating=num_parents_mating,
@@ -452,41 +470,34 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
     first_solution, first_solution_fitness, first_solution_idx = ga_instance.best_solution()
     solution = first_solution
 
-    if initial_state in training_data.columns: 
-        perfect_fitness = (training_data.shape[1] - 1) * 1000 + 500
-    else: 
-        perfect_fitness = training_data.shape[1] * 1000
-    
-    if first_solution_fitness < perfect_fitness: 
-        print(target_gene + " does not fit perfectly")
-        print(str(first_solution_fitness) + "/" + str(perfect_fitness))
-
-        fitness_function = max_features_fitness_func
+    for i in range(0, max_iter):
         ga_instance = pygad.GA(num_generations=num_generations,
-                            num_parents_mating=num_parents_mating,
-                            fitness_func=fitness_function,
-                            sol_per_pop=sol_per_pop,
-                            num_genes=num_genes,
-                            parent_selection_type=parent_selection_type,
-                            keep_parents=keep_parents,
-                            crossover_type=crossover_type,
-                            mutation_type=mutation_type,
-                            mutation_percent_genes=mutation_percent_genes, 
-                            suppress_warnings = True,
-                            initial_population = ga_instance.population,
-                            gene_space = [-1, 0, 1])
-
+                    num_parents_mating=num_parents_mating,
+                    fitness_func=fitness_function,
+                    sol_per_pop=sol_per_pop,
+                    num_genes=num_genes,
+                    parent_selection_type=parent_selection_type,
+                    keep_parents=keep_parents,
+                    crossover_type=crossover_type,
+                    mutation_type=mutation_type,
+                    mutation_percent_genes=mutation_percent_genes, 
+                    suppress_warnings = True,
+                    initial_population = ga_instance.population,
+                    gene_space = [-1, 0, 1])
         ga_instance.run()
         second_solution, second_solution_fitness, second_solution_idx = ga_instance.best_solution()
 
-        if second_solution_fitness < perfect_fitness: 
-            print(target_gene + " does not fit perfectly")
-            print(str(second_solution_fitness) + "/" + str(perfect_fitness))
-
-            if second_solution_fitness > first_solution_fitness:
-                solution = second_solution
+        if second_solution_fitness == first_solution_fitness:
+            break 
+        elif second_solution_fitness > first_solution_fitness: 
+            first_solution = second_solution
+            first_solution_fitness = second_solution_fitness
         
-
+    if first_solution_fitness < perfect_fitness: 
+        print(target_gene + " does not fit perfectly")
+        print(str(first_solution_fitness) + "/" + str(perfect_fitness))
+    
+    solution = first_solution
     new_edges_df = pd.DataFrame()
     
     for i in range(0, training_data.shape[0]):
@@ -507,14 +518,14 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
     return new_edges_df
 
 # have the parameters in 
-def create_network(training_dict, initial_state, selected_regulators_dict = dict(), num_generations = 1000, num_parents_mating = 4, sol_per_pop = 10): 
+def create_network(training_dict, initial_state, selected_regulators_dict = dict(), num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10): 
     total_network = pd.DataFrame()
     for temp_gene in training_dict.keys():
         print("start fitting " + temp_gene )
         if temp_gene in selected_regulators_dict.keys():
-            new_network = GA_fit_data(training_dict, temp_gene, initial_state, selected_regulators = selected_regulators_dict[temp_gene], num_generations = num_generations, num_parents_mating = num_parents_mating, sol_per_pop = sol_per_pop)
+            new_network = GA_fit_data(training_dict, temp_gene, initial_state, selected_regulators = selected_regulators_dict[temp_gene], num_generations = num_generations, max_iter = max_iter, num_parents_mating = num_parents_mating, sol_per_pop = sol_per_pop)
         else:
-            new_network = GA_fit_data(training_dict, temp_gene, initial_state, selected_regulators = list(), num_generations = num_generations, num_parents_mating = num_parents_mating, sol_per_pop = sol_per_pop)
+            new_network = GA_fit_data(training_dict, temp_gene, initial_state, selected_regulators = list(), num_generations = num_generations, max_iter = max_iter, num_parents_mating = num_parents_mating, sol_per_pop = sol_per_pop)
         total_network = pd.concat([total_network, new_network])
     return total_network
 
