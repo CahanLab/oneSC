@@ -48,6 +48,13 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
         sub_samp_tab = samp_tab.loc[samp_tab[cluster_id] == cluster, :]
         cluster_time_dict[cluster] = np.mean(sub_samp_tab[pt_id])
 
+    #NOTE this is to make the state priority dictionary 
+    state_priority_dict = dict()
+    for temp_lineage in transition_dict.keys(): 
+        temp_state_df = transition_dict[temp_lineage]
+        for i in range(0, temp_state_df.shape[1]): 
+            state_priority_dict[temp_state_df.columns[i]] = i + 1
+
     for temp_gene in all_genes: 
 
         # get all the potential regulators 
@@ -277,7 +284,11 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
 
         else: 
             training_set['features'] = processed_feature_matrix
-
+        
+        state_priority = list()
+        for temp_state in training_set['features'].columns:
+            state_priority.append(state_priority_dict[temp_state])
+        training_set['state_priority'] = np.array(state_priority)
         training_dict[temp_gene] = training_set
     return training_dict
 
@@ -297,6 +308,10 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
     training_data = training_data.drop_duplicates()
     training_targets = training_dict[target_gene]['phenotype']
     feature_dict = dict()
+
+    # load in the priority 
+    state_priorities = training_dict[target_gene]['state_priority']
+    state_weights = np.max(state_priorities) + 1 - state_priorities
 
     def to_string_pattern(gene_pattern):
         gene_pattern = [str(x) for x in gene_pattern]
@@ -395,6 +410,10 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
 
     def min_features_fitness_func(solution, solution_idx):
         correctness_sum = 0
+        
+        correct_scale = 1000
+        activated_bonus_scale = 0.001
+        blank_fitness_scale = np.median(state_weights) + 0.1
 
         for i in range(0, len(training_data.columns)):
             state = training_data.columns[i]
@@ -406,14 +425,6 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
 
             total_prob = activation_prob * repression_prob
 
-            # give less weight to the initial state -- since initial states could have mutual inhibition that contradict the overall trend
-            # allow some room for the initial state to be contradictory. 10 initial match == 1 other match 
-            
-            correct_scale = 1000
-            num_gene_scale = 10
-            inhibitor_bonus_scale = 1
-            activated_bonus_scale = 0.001
-
             if state == initial_state: 
                 temp_score = int(total_prob == training_targets[i])
                 temp_score = temp_score * (correct_scale/2)
@@ -421,11 +432,10 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
                 temp_score = int(total_prob == training_targets[i]) * correct_scale
             correctness_sum = correctness_sum + temp_score
 
-        fitness_score = correctness_sum + (np.sum(np.array(solution) == 0) * num_gene_scale) # minimizes the number of genes 
-        fitness_score = fitness_score + (np.sum(np.array(solution) == -1) * inhibitor_bonus_scale)  # favor genes that are inhibitory 
+        fitness_score = correctness_sum + (np.sum(np.array(solution) == 0) * blank_fitness_scale) # minimizes the number of genes 
 
-        # NOTE the code adds one additional edge that do not interfere with reachability
-        fitness_score = fitness_score + min(np.sum(np.array(solution) == -1) * num_gene_scale, max_alt_inhibtors * num_gene_scale)
+        for temp_index in range(0, training_data.shape[0]):
+            fitness_score = fitness_score + np.max(np.array(training_data.iloc[temp_index, :]) * np.array(state_weights)) 
         fitness_score = fitness_score + np.sum(training_data.loc[np.array(solution) == 1, :].sum()) * activated_bonus_scale # favor genes that have a lot of activation across 
 
         # penalize the self inhibitors
@@ -563,7 +573,7 @@ def select_regulators_time_series(lineage_time_change_dict, activation_window = 
         partial_df = partial_df.loc[partial_df['PseudoTime'] > lag, :]
         
         for idx in partial_df.index: 
-            sub_df = full_df.loc[np.logical_and(full_df['PseudoTime'] >= partial_df.loc[idx, 'PseudoTime'] - activation_window, full_df['PseudoTime'] < partial_df.loc[idx, 'PseudoTime'] - lag), :]
+            sub_df = full_df.loc[np.logical_and(full_df['PseudoTime'] >= (partial_df.loc[idx, 'PseudoTime'] - activation_window), full_df['PseudoTime'] < partial_df.loc[idx, 'PseudoTime'] - lag), :]
             temp_gene = partial_df.loc[idx, 'gene']
             if temp_gene in potential_reg_dict.keys(): 
                 potential_reg_dict[temp_gene] = np.append(potential_reg_dict[temp_gene], sub_df['gene'])
