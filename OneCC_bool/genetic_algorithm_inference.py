@@ -413,7 +413,11 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
         
         correct_scale = 1000
         activated_bonus_scale = 0.001
-        blank_fitness_scale = np.median(state_weights) + 0.1
+
+        if len(np.unique(state_weights)) == 1: 
+            blank_fitness_scale = 0
+        else:
+            blank_fitness_scale = np.median(state_weights) + 0.1
 
         for i in range(0, len(training_data.columns)):
             state = training_data.columns[i]
@@ -442,22 +446,26 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
         if self_reg_index > -1:
             if solution[self_reg_index] == -1:
                 fitness_score = fitness_score - (3 * correct_scale)
-
-
-        #TODO hand-wavy method of controlling for the number of 
+ 
         return fitness_score
 
-    # the below are just parameters for the genetic algorithm     
+    # the below are just parameters for the genetic algorithm  
+    '''
+    if feature_style == "max":
+        fitness_function = max_features_fitness_func
+    else:   
+        fitness_function = min_features_fitness_func
+    '''
     fitness_function = min_features_fitness_func
     num_genes = training_data.shape[0]
 
     parent_selection_type = "sss"
     keep_parents = 2
-    crossover_type = "uniform"
+    crossover_type = "single_point"
     
-    mutation_type = "adaptive"
-    #mutation_percent_genes = 20
-    mutation_percent_genes = [40, 10] # maybe try to use number of genes as 
+    mutation_type = "random"
+    mutation_percent_genes = 40
+    #mutation_percent_genes = [40, 10] # maybe try to use number of genes as 
 
     if initial_state in training_data.columns: 
         perfect_fitness = (training_data.shape[1] - 1) * 1000 + 500
