@@ -103,15 +103,18 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
                 cell_type_2 = temp_transition.columns[temp_index]
                 
                 # select the time series data within a range 
-                min_time = np.mean(samp_tab.loc[samp_tab[cluster_id] == cell_type_1, pt_id]) # TODO could consider median 
+                min_time = np.median(samp_tab.loc[samp_tab[cluster_id] == cell_type_1, pt_id]) # TODO could consider median 
                 max_time = np.max(samp_tab.loc[samp_tab[cluster_id] == cell_type_2, pt_id]) # TODO probably median might make more sense
                 
+
+
                 # get all the transition  
                 gene_transitions = temp_transition.iloc[:, temp_index].copy()
                 gene_transitions = gene_transitions[gene_transitions != 0]
                 
-                sub_temp_time_change = temp_time_change.loc[np.logical_and(temp_time_change['PseudoTime'] >= min_time, temp_time_change['PseudoTime'] <= max_time), ]
-                
+                sub_temp_time_change = temp_time_change.loc[np.logical_and(temp_time_change['PseudoTime'] >= min_time, temp_time_change['PseudoTime'] <= max_time), ].copy()
+ 
+
                 # remove all the disagreement of transition 
                 # if temp_gene is suppose to transition into 1, then we remove all the instance at which temp_gene is transitioned into - from the time series 
                 if gene_transitions[temp_gene] == 1: 
@@ -146,11 +149,12 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
                     not_regulator_genes = np.array(gene_transitions.index)
                     not_regulator_genes_dict[temp_index] = not_regulator_genes[not_regulator_genes != temp_gene]
                     continue
-
+                
                 cur_latest_time = sub_temp_time_change.loc[:, "PseudoTime"]
                 cur_latest_time = cur_latest_time[last_index] # find all the genes that changed before then
         
                 cur_potential_regulators = np.array([])
+
                 for temp_gene_2 in gene_transitions.index:
                     if temp_gene_2 == temp_gene: 
                         continue 
@@ -159,16 +163,17 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
                         sign = "+"
                     else: 
                         sign = "-"
-                    
+
                     # if there exist a time point which the supposed change matches the time-series data 
                     # which means the change occured within an observable time frame 
                     if np.sum(np.logical_and(sub_temp_time_change['gene'] == temp_gene_2, sub_temp_time_change['type'] == sign)) > 0: 
                         sub_temp_time_change_2 = sub_temp_time_change.loc[np.logical_and(sub_temp_time_change['gene'] == temp_gene_2, sub_temp_time_change['type'] == sign), :]
                         sub_temp_time_change_2 = sub_temp_time_change_2.sort_values("PseudoTime") 
                         sub_temp_time_change_2.index = np.arange(0, sub_temp_time_change_2.shape[0])
-
+                        
                         latest_time = sub_temp_time_change_2.loc[:, "PseudoTime"] 
                         latest_time = latest_time[0]
+
                         # if the change time of potential regulator is much earlier than the change time of temp_gene
                         if latest_time <= (cur_latest_time - act_tolerance):
                             cur_potential_regulators = np.concatenate([cur_potential_regulators, [temp_gene_2]])   
@@ -193,7 +198,7 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
             
             # loop through the possible feature index list 
             possible_feature_index_list = np.setdiff1d(possible_feature_index_list, exclude_indexes) 
-            
+
             for possible_feature_index in possible_feature_index_list:
                 col_name = temp_state.columns[possible_feature_index]
                 cur_col = temp_state.iloc[:, possible_feature_index].copy()
@@ -201,6 +206,7 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
                 # if it is indicated that we might have to change the genes
                 if possible_feature_index in not_regulator_genes_dict.keys():
                     prev_col = temp_state.iloc[:, possible_feature_index - 1].copy()
+
                     for not_regulator_gene in not_regulator_genes_dict[possible_feature_index]:
                         cur_col[not_regulator_gene] = prev_col[not_regulator_gene]
                 
@@ -412,13 +418,14 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
         correctness_sum = 0
         
         correct_scale = 1000
-        activated_bonus_scale = 0.001
+        activated_bonus_scale = 0.01
+
+        blank_fitness_scale = np.median(np.unique(state_weights)) + 0.1
 
         if len(np.unique(state_weights)) == 1: 
             blank_fitness_scale = 0
-        else:
-            blank_fitness_scale = np.median(state_weights) + 0.1
-
+        
+        
         for i in range(0, len(training_data.columns)):
             state = training_data.columns[i]
             norm_dict = training_data.loc[:, state]
@@ -436,32 +443,32 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
                 temp_score = int(total_prob == training_targets[i]) * correct_scale
             correctness_sum = correctness_sum + temp_score
 
+        '''
+        fitness_score = correctness_sum + (np.sum(solution == 0) * 1) + (np.sum(solution == -1) * 0.1)
+        '''
+  
         fitness_score = correctness_sum + (np.sum(np.array(solution) == 0) * blank_fitness_scale) # minimizes the number of genes 
 
         for temp_index in range(0, training_data.shape[0]):
             fitness_score = fitness_score + np.max(np.array(training_data.iloc[temp_index, :]) * np.array(state_weights)) 
         fitness_score = fitness_score + np.sum(training_data.loc[np.array(solution) == 1, :].sum()) * activated_bonus_scale # favor genes that have a lot of activation across 
-
+        
         # penalize the self inhibitors
         if self_reg_index > -1:
             if solution[self_reg_index] == -1:
                 fitness_score = fitness_score - (3 * correct_scale)
- 
+        
+        fitness_score = fitness_score + np.sum(training_data.loc[np.array(solution) != 0, :].sum()) * activated_bonus_scale
         return fitness_score
 
     # the below are just parameters for the genetic algorithm  
-    '''
-    if feature_style == "max":
-        fitness_function = max_features_fitness_func
-    else:   
-        fitness_function = min_features_fitness_func
-    '''
+
     fitness_function = min_features_fitness_func
     num_genes = training_data.shape[0]
 
     parent_selection_type = "sss"
-    keep_parents = 2
-    crossover_type = "single_point"
+    keep_parents = num_parents_mating
+    crossover_type = "uniform"
     
     mutation_type = "random"
     mutation_percent_genes = 40
