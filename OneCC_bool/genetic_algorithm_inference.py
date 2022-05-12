@@ -420,11 +420,11 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
         correct_scale = 1000
         activated_bonus_scale = 0.01
 
+        '''
         blank_fitness_scale = np.median(np.unique(state_weights)) + 0.1
-
         if len(np.unique(state_weights)) == 1: 
             blank_fitness_scale = 0
-        
+        '''
         
         for i in range(0, len(training_data.columns)):
             state = training_data.columns[i]
@@ -443,16 +443,16 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
                 temp_score = int(total_prob == training_targets[i]) * correct_scale
             correctness_sum = correctness_sum + temp_score
 
-        '''
         fitness_score = correctness_sum + (np.sum(solution == 0) * 1) + (np.sum(solution == -1) * 0.1)
+    
+
         '''
-  
         fitness_score = correctness_sum + (np.sum(np.array(solution) == 0) * blank_fitness_scale) # minimizes the number of genes 
 
         for temp_index in range(0, training_data.shape[0]):
             fitness_score = fitness_score + np.max(np.array(training_data.iloc[temp_index, :]) * np.array(state_weights)) 
         fitness_score = fitness_score + np.sum(training_data.loc[np.array(solution) == 1, :].sum()) * activated_bonus_scale # favor genes that have a lot of activation across 
-        
+        '''
         # penalize the self inhibitors
         if self_reg_index > -1:
             if solution[self_reg_index] == -1:
@@ -494,35 +494,33 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
     ga_instance.run()
     first_solution, first_solution_fitness, first_solution_idx = ga_instance.best_solution()
     solution = first_solution
+    solution_fitness = first_solution_fitness
 
-    for i in range(0, max_iter):
-        ga_instance = pygad.GA(num_generations=num_generations,
-                    num_parents_mating=num_parents_mating,
-                    fitness_func=fitness_function,
-                    sol_per_pop=sol_per_pop,
-                    num_genes=num_genes,
-                    parent_selection_type=parent_selection_type,
-                    keep_parents=keep_parents,
-                    crossover_type=crossover_type,
-                    mutation_type=mutation_type,
-                    mutation_percent_genes=mutation_percent_genes, 
-                    suppress_warnings = True,
-                    initial_population = ga_instance.population,
-                    gene_space = [-1, 0, 1])
-        ga_instance.run()
-        second_solution, second_solution_fitness, second_solution_idx = ga_instance.best_solution()
+    fitness_function = max_features_fitness_func
+    ga_instance = pygad.GA(num_generations=num_generations,
+        num_parents_mating=num_parents_mating,
+        fitness_func=fitness_function,
+        sol_per_pop=sol_per_pop,
+        num_genes=num_genes,
+        parent_selection_type=parent_selection_type,
+        keep_parents=keep_parents,
+        crossover_type=crossover_type,
+        mutation_type=mutation_type,
+        mutation_percent_genes=mutation_percent_genes, 
+        suppress_warnings = True,
+        initial_population = ga_instance.population,
+        gene_space = [-1, 0, 1])
+    ga_instance.run()
+    second_solution, second_solution_fitness, second_solution_idx = ga_instance.best_solution()
+    
+    if second_solution_fitness + 2 > first_solution_fitness: 
+        solution = second_solution
+        solution_fitness = second_solution_fitness
 
-        if second_solution_fitness == first_solution_fitness:
-            break 
-        elif second_solution_fitness > first_solution_fitness: 
-            first_solution = second_solution
-            first_solution_fitness = second_solution_fitness
-        
-    if first_solution_fitness < perfect_fitness: 
+    if solution_fitness < perfect_fitness: 
         print(target_gene + " does not fit perfectly")
         print(str(first_solution_fitness) + "/" + str(perfect_fitness))
-    
-    solution = first_solution
+
     new_edges_df = pd.DataFrame()
     
     for i in range(0, training_data.shape[0]):
