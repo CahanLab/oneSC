@@ -51,3 +51,10 @@ def UMAP_embedding_apply(train_obs, query_exp):
     UMAP_matrix = my_UMAP.transform(PCA_features)
     UMAP_matrix = pd.DataFrame(UMAP_matrix, index = PCA_features.index, columns = ['UMAP_1', 'UMAP_2'])
     return UMAP_matrix
+
+def gaussian_kernel(x, mean, stdv):
+    bandwidth = np.linalg.norm(stdv)
+    center = x - mean
+    guassian_result = np.exp(-np.linalg.norm(center) / (2 * bandwidth))
+    return guassian_result
+

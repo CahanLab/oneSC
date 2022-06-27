@@ -1,9 +1,20 @@
-from concurrent.futures import process
 import numpy as np 
 import pandas as pd
 import pygad
 
 def define_states(exp_tab, samp_tab, lineage_cluster, vector_thresh, cluster_col = 'cluster_id'):
+    """Define booleanized and discrete cell state profiles 
+
+    Args:
+        exp_tab (pandas.DataFrame): scRNA-seq expression matrix. Rownames are genes; column names are sample barcodes. 
+        samp_tab (pandas.DataFrame): sample Ta
+        lineage_cluster (_type_): _description_
+        vector_thresh (_type_): _description_
+        cluster_col (str, optional): _description_. Defaults to 'cluster_id'.
+
+    Returns:
+        _type_: _description_
+    """
     state_dict = dict()
     for lineage in lineage_cluster.keys():
         
