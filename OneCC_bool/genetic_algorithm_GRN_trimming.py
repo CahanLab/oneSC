@@ -117,8 +117,6 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
                 min_time = np.median(samp_tab.loc[samp_tab[cluster_id] == cell_type_1, pt_id]) # TODO could consider median 
                 max_time = np.max(samp_tab.loc[samp_tab[cluster_id] == cell_type_2, pt_id]) # TODO probably median might make more sense
                 
-
-
                 # get all the transition  
                 gene_transitions = temp_transition.iloc[:, temp_index].copy()
                 gene_transitions = gene_transitions[gene_transitions != 0]
@@ -205,7 +203,7 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
 
             # this is to extract the features for training logicistic regressor 
             possible_feature_index_list = np.arange(0, temp_transition.shape[1])
-            exclude_indexes = np.setdiff1d(prev_index_list, cur_index_list) 
+            exclude_indexes = np.setdiff1d(prev_index_list, cur_index_list) # remove the all instance at which the previous configuration occurs 
             
             # loop through the possible feature index list 
             possible_feature_index_list = np.setdiff1d(possible_feature_index_list, exclude_indexes) 
@@ -215,21 +213,26 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
                 cur_col = temp_state.iloc[:, possible_feature_index].copy()
 
                 # if it is indicated that we might have to change the genes
+                # find the genes that occured after the change of target gene 
+                # use the previous gene expression as feature 
+                # TODO change the not_regulator_genes_dict to something like -- occured after target gene change 
                 if possible_feature_index in not_regulator_genes_dict.keys():
                     prev_col = temp_state.iloc[:, possible_feature_index - 1].copy()
-
                     for not_regulator_gene in not_regulator_genes_dict[possible_feature_index]:
                         cur_col[not_regulator_gene] = prev_col[not_regulator_gene]
                 
                 # this is to check the self regulation features 
                 # this is to add in self-regulation 
                 # NOTE: this part of the code is to add in the self-regulatory features 
+                # TODO: this code is quite confusing. Please make it more readable 
                 if possible_feature_index - 1 < 0: 
                     self_regulation_features[col_name] = cur_col[temp_gene]
                 else: 
                     prev_col = temp_state.iloc[:, possible_feature_index - 1].copy()
                     if prev_col[temp_gene] == 1: 
                         self_regulation_features[col_name] = 1
+
+                    # if we want to turn off the constant self-activation 
                     else:
                         if temp_state.columns[possible_feature_index - 1] in self_regulation_features.keys():
                             if self_regulation_features[temp_state.columns[possible_feature_index - 1]] == 1: 
@@ -237,12 +240,16 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
                             else:
                                 self_regulation_features[col_name] = 0
                         else:
-                            self_regulation_features[col_name] = 0
-                
+                            self_regulation_features[col_name] = 0         
                 raw_feature_matrix[col_name] = cur_col
-
-            bad_genes_dict[temp_lineage] = not_regulator_genes_dict    
         
+            # add the steady state profile as a seperate training data point 
+            # to ensure that the steady state will be maintained as steady state
+            raw_feature_matrix[temp_state.columns[-1] + "_SteadyState"] = temp_state[temp_state.columns[-1]]
+            bad_genes_dict[temp_lineage] = not_regulator_genes_dict    
+
+            # TODO this seems like the most logical place to add the steady state 
+            # TODO add logic for adding in the steady states 
         if len(potential_regulators) == 0:
             continue
         training_set = dict()
@@ -252,7 +259,10 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
         # add in the self regulation 
         processed_feature_matrix = raw_feature_matrix.copy()
         for temp_col in processed_feature_matrix.columns:
-            processed_feature_matrix.loc[temp_gene, temp_col] = self_regulation_features[temp_col]
+            if "_SteadyState" in temp_col: 
+                processed_feature_matrix.loc[temp_gene, temp_col] = self_regulation_features[temp_col.replace("_SteadyState", "")]
+            else:
+                processed_feature_matrix.loc[temp_gene, temp_col] = self_regulation_features[temp_col]
 
         #potential_regulators = potential_regulators[potential_regulators != temp_gene]
         potential_regulators = list(potential_regulators)
@@ -270,9 +280,10 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
                 temp_feat_list = [str(x) for x in temp_feat_list]
                 temp_feat_pattern = "-".join(temp_feat_list)
                 
+                # if the exact same gene pattern has been used before 
                 if temp_feat_pattern in feature_pattern_dict.keys():
-                    old_colum_name = feature_pattern_dict[temp_feat_pattern]
-                    if cluster_time_dict[old_colum_name] < cluster_time_dict[column_name]:
+                    old_column_name = feature_pattern_dict[temp_feat_pattern]
+                    if cluster_time_dict[old_column_name.replace("_SteadyState", "")] < cluster_time_dict[column_name.replace("_SteadyState", "")]:
                         feature_pattern_dict[temp_feat_pattern] = column_name
                 else:
                     feature_pattern_dict[temp_feat_pattern] = column_name
@@ -298,12 +309,14 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
             # the order is not preserved...
             processed_feature_matrix = processed_feature_matrix.loc[:, list(feature_pattern_dict.values())]
             training_set['features'] = processed_feature_matrix
-
         else: 
             training_set['features'] = processed_feature_matrix
         
+        # set up priority list for each state in the case that we would need to assign priority in the genetic algorithm later on 
         state_priority = list()
         for temp_state in training_set['features'].columns:
+            if "_SteadyState" in temp_state: 
+                temp_state = temp_state.replace("_SteadyState", "")
             state_priority.append(state_priority_dict[temp_state])
         training_set['state_priority'] = np.array(state_priority)
         training_dict[temp_gene] = training_set
@@ -562,52 +575,5 @@ def create_network(training_dict, initial_state, selected_regulators_dict = dict
             new_network = GA_fit_data(training_dict, temp_gene, initial_state, selected_regulators = list(), num_generations = num_generations, max_iter = max_iter, num_parents_mating = num_parents_mating, sol_per_pop = sol_per_pop)
         total_network = pd.concat([total_network, new_network])
     return total_network
-
-def select_regulators_transition(transition_dict, num_prev = 2): 
-    potential_reg_dict = dict()
-    
-    for temp_lineage in transition_dict.keys(): 
-        temp_trans = transition_dict[temp_lineage]
-        for i in range(1, temp_trans.shape[1]):
-            cur_col = temp_trans.iloc[:, i]
-            
-            if i - num_prev < 0: 
-                prev_index = 0
-            else: 
-                prev_index = i - num_prev
-            prev_col = temp_trans.iloc[:, prev_index:i]
-            prev_col = np.abs(prev_col)
-            prev_col = prev_col.sum(axis = 1)
-            prev_col = prev_col[prev_col != 0]
-            cur_col = cur_col[cur_col != 0]
-            
-            for temp_gene in cur_col.index: 
-                if temp_gene in potential_reg_dict.keys(): 
-                    potential_reg_dict[temp_gene] = np.unique(np.append(potential_reg_dict[temp_gene], np.array(prev_col.index)))
-                    potential_reg_dict[temp_gene] = np.unique(np.append(potential_reg_dict[temp_gene], np.array(cur_col.index)))
-                else:
-                    potential_reg_dict[temp_gene] = np.unique(np.append(np.array(cur_col.index), np.array(prev_col.index)))
-    return potential_reg_dict
-
-def select_regulators_time_series(lineage_time_change_dict, activation_window = 0.25, lag = 0.02): 
-    potential_reg_dict = dict()
-    for temp_lineage in lineage_time_change_dict.keys(): 
-        full_df = lineage_time_change_dict[temp_lineage].copy()
-        partial_df = lineage_time_change_dict[temp_lineage].copy()
-        partial_df = partial_df.loc[partial_df['PseudoTime'] > lag, :]
-        
-        for idx in partial_df.index: 
-            sub_df = full_df.loc[np.logical_and(full_df['PseudoTime'] >= (partial_df.loc[idx, 'PseudoTime'] - activation_window), full_df['PseudoTime'] < partial_df.loc[idx, 'PseudoTime'] - lag), :]
-            temp_gene = partial_df.loc[idx, 'gene']
-            if temp_gene in potential_reg_dict.keys(): 
-                potential_reg_dict[temp_gene] = np.append(potential_reg_dict[temp_gene], sub_df['gene'])
-                potential_reg_dict[temp_gene] = np.unique(potential_reg_dict[temp_gene])
-            else:
-                potential_reg_dict[temp_gene] = np.unique(sub_df['gene'])
-    return potential_reg_dict
-
-
-
-
 
 
