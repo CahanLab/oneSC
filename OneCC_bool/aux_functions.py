@@ -5,10 +5,13 @@ import pandas as pd
  
 
 def UMAP_embedding_train(train_exp): 
-    """Trains a UMAP embedder 
+    """Calculate UMAP embedder based on top 9 PCs 
 
     Args:
-        train_exp ([pandas.DataFrame]): training data 
+        train_exp (pandas.DataFrame): expression profile. Columns are samples and rows are genes. 
+
+    Returns:
+        dict: dictionary object needed to apply UMAP 
     """
     training_obs = dict()
     training_obs['feature_genes'] = np.array(train_exp.index)
@@ -30,7 +33,7 @@ def UMAP_embedding_train(train_exp):
     my_UMAP = umap.UMAP().fit(PCA_features)
     training_obs['UMAP'] = my_UMAP
 
-    return(training_obs)
+    return training_obs
 
 def UMAP_embedding_apply(train_obs, query_exp): 
     feature_genes = train_obs['feature_genes']
