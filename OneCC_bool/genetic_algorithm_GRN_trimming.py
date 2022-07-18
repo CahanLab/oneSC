@@ -322,7 +322,7 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
         training_dict[temp_gene] = training_set
     return training_dict
 
-def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators = list(), num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, max_alt_inhibtors = 2): 
+def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators = list(), num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = False): 
     # TODO for the future segment the generations out so that you can do them in batches     
 
     training_data = training_dict[target_gene]['features']
@@ -429,10 +429,13 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
             correctness_sum = correctness_sum + temp_score
         fitness_score = correctness_sum + (np.sum(solution == 1) * 1) + (np.sum(solution == -1) * 1.5) # if a gene can be either activator or inhibitor, choose inhibitor
 
-        # peanlize the crap out of self inhibiton 
+        # remove self inhibition since it would not work unless we go on to protein level 
         if self_reg_index > -1:
             if solution[self_reg_index] == -1:
-                fitness_score = fitness_score - 2000
+                fitness_score = fitness_score - 3000
+            elif solution[self_reg_index] == 1:
+                if reduce_auto_reg == True:
+                    fitness_score = fitness_score - 4 # remove unnecessary auto-activator. 
         
         # if it comes to non-reactive and reactive, pick the reactive gene 
         fitness_score = fitness_score + np.sum(training_data.loc[np.array(solution) != 0, :].sum()) * 0.01
@@ -443,12 +446,6 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
         
         correct_scale = 1000
         activated_bonus_scale = 0.01
-
-        '''
-        blank_fitness_scale = np.median(np.unique(state_weights)) + 0.1
-        if len(np.unique(state_weights)) == 1: 
-            blank_fitness_scale = 0
-        '''
         
         for i in range(0, len(training_data.columns)):
             state = training_data.columns[i]
@@ -467,16 +464,8 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
                 temp_score = int(total_prob == training_targets[i]) * correct_scale
             correctness_sum = correctness_sum + temp_score
 
-        fitness_score = correctness_sum + (np.sum(solution == 0) * 1) + (np.sum(solution == -1) * 0.1)
+        fitness_score = correctness_sum + (np.sum(solution == 0) * 1) + (np.sum(solution == -1) * 0.1) #if an edge can be either activator or inhibitor, choose activator 
     
-
-        '''
-        fitness_score = correctness_sum + (np.sum(np.array(solution) == 0) * blank_fitness_scale) # minimizes the number of genes 
-
-        for temp_index in range(0, training_data.shape[0]):
-            fitness_score = fitness_score + np.max(np.array(training_data.iloc[temp_index, :]) * np.array(state_weights)) 
-        fitness_score = fitness_score + np.sum(training_data.loc[np.array(solution) == 1, :].sum()) * activated_bonus_scale # favor genes that have a lot of activation across 
-        '''
         # penalize the self inhibitors
         if self_reg_index > -1:
             if solution[self_reg_index] == -1:
@@ -537,10 +526,11 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
     ga_instance.run()
     second_solution, second_solution_fitness, second_solution_idx = ga_instance.best_solution()
     
-    if second_solution_fitness + 2 > first_solution_fitness: 
+    # favor the maximum fitness 
+    if second_solution_fitness + 2 >= first_solution_fitness: 
         solution = second_solution
         solution_fitness = second_solution_fitness
-
+    
     if solution_fitness < perfect_fitness: 
         print(target_gene + " does not fit perfectly")
         print(str(first_solution_fitness) + "/" + str(perfect_fitness))
