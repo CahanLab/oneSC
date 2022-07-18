@@ -555,14 +555,14 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
     return new_edges_df
 
 # have the parameters in 
-def create_network(training_dict, initial_state, selected_regulators_dict = dict(), num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10): 
+def create_network(training_dict, initial_state, selected_regulators_dict = dict(), num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = False): 
     total_network = pd.DataFrame()
     for temp_gene in training_dict.keys():
         print("start fitting " + temp_gene )
         if temp_gene in selected_regulators_dict.keys():
-            new_network = GA_fit_data(training_dict, temp_gene, initial_state, selected_regulators = selected_regulators_dict[temp_gene], num_generations = num_generations, max_iter = max_iter, num_parents_mating = num_parents_mating, sol_per_pop = sol_per_pop)
+            new_network = GA_fit_data(training_dict, temp_gene, initial_state, selected_regulators = selected_regulators_dict[temp_gene], num_generations = num_generations, max_iter = max_iter, num_parents_mating = num_parents_mating, sol_per_pop = sol_per_pop, reduce_auto_reg = reduce_auto_reg)
         else:
-            new_network = GA_fit_data(training_dict, temp_gene, initial_state, selected_regulators = list(), num_generations = num_generations, max_iter = max_iter, num_parents_mating = num_parents_mating, sol_per_pop = sol_per_pop)
+            new_network = GA_fit_data(training_dict, temp_gene, initial_state, selected_regulators = list(), num_generations = num_generations, max_iter = max_iter, num_parents_mating = num_parents_mating, sol_per_pop = sol_per_pop, reduce_auto_reg = reduce_auto_reg)
         total_network = pd.concat([total_network, new_network])
     return total_network
 
