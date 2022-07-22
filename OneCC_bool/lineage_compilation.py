@@ -105,7 +105,7 @@ def find_threshold_vector(exp_df, samp_st, cluster_col = "cluster"):
         temp_st = samp_st.loc[samp_st[cluster_col] == temp_cluster, :]
         temp_exp = exp_df.loc[:, temp_st.index]
         cluster_exp[temp_cluster] = temp_exp.mean (axis = 1)
-    return (cluster_exp.max(axis = 1) - cluster_exp.min(axis = 1)) / 2
+    return ((cluster_exp.max(axis = 1) - cluster_exp.min(axis = 1)) / 2 + cluster_exp.min(axis = 1))
 
 def construct_cluster_network(train_exp, sampTab, initial_clusters, terminal_clusters, cluster_col = "cluster_id", pseudo_col = "pseudotime"):
     pt_list = list()

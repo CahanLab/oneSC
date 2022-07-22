@@ -22,7 +22,7 @@ def define_states(exp_tab, samp_tab, lineage_cluster, vector_thresh, cluster_col
         for cell_type in lineage_cluster[lineage]:
             sub_st = samp_tab.loc[samp_tab[cluster_col] == cell_type, :]
             sub_exp = exp_tab.loc[:, sub_st.index]
-            temp_df[cell_type] = (sub_exp.mean(axis = 1) > vector_thresh) * 1
+            temp_df[cell_type] = (sub_exp.mean(axis = 1) >= vector_thresh) * 1
         state_dict[lineage] = temp_df
     return state_dict  
 
