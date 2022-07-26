@@ -533,7 +533,7 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
     
     if solution_fitness < perfect_fitness: 
         print(target_gene + " does not fit perfectly")
-        print(str(first_solution_fitness) + "/" + str(perfect_fitness))
+        print(str(solution_fitness) + "/" + str(perfect_fitness))
 
     new_edges_df = pd.DataFrame()
     
