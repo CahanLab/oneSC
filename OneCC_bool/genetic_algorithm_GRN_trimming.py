@@ -527,13 +527,13 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
     second_solution, second_solution_fitness, second_solution_idx = ga_instance.best_solution()
     
     # favor the maximum fitness 
-    if second_solution_fitness + 2 >= first_solution_fitness: 
+    if second_solution_fitness + 2 > first_solution_fitness: 
         solution = second_solution
         solution_fitness = second_solution_fitness
     
     if solution_fitness < perfect_fitness: 
         print(target_gene + " does not fit perfectly")
-        print(str(first_solution_fitness) + "/" + str(perfect_fitness))
+        print(str(solution_fitness) + "/" + str(perfect_fitness))
 
     new_edges_df = pd.DataFrame()
     
