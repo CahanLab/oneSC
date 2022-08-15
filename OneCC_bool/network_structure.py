@@ -42,7 +42,7 @@ class network_structure(object):
             norm_factors['max'] = 2
             norm_factors['min'] = 0.02
             norm_factors['b'] = ((2 - 0.02) / 2) + 0.02
-            norm_factors['m'] = 7
+            norm_factors['m'] = 5
 
             gene_obj.add_norm_factors(norm_factors)
             gene_obj.add_max_exp(2)
