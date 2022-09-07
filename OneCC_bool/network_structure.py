@@ -37,7 +37,7 @@ class network_structure(object):
             
             gene_obj.add_regulation_combo(temp_combo_dict)
             
-            gene_obj.add_regulation_coeff(2)
+            gene_obj.add_regulation_coeff(max_val) 
             norm_factors = dict()
             norm_factors['max'] = max_val
             norm_factors['min'] = min_val
