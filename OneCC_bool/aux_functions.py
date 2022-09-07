@@ -2,8 +2,6 @@ from sklearn.decomposition import PCA
 import umap
 import numpy as np 
 import pandas as pd
- 
-
 def UMAP_embedding_train(train_exp): 
     """Calculate UMAP embedder based on top 9 PCs 
 

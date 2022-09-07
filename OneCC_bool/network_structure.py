@@ -9,7 +9,7 @@ class network_structure(object):
         self.subnet_name = subnet_name
         self.network_dict = dict()
         
-    def train_dummy_grn(self, grn_tab):
+    def train_dummy_grn(self, grn_tab, max_val = 2, min_val = 0.02, m = 7):
         network_dict = dict()
    
         all_genes = np.concatenate((np.unique(grn_tab['TF']), np.unique(grn_tab['TG'])))
@@ -39,13 +39,13 @@ class network_structure(object):
             
             gene_obj.add_regulation_coeff(2)
             norm_factors = dict()
-            norm_factors['max'] = 2
-            norm_factors['min'] = 0.02
-            norm_factors['b'] = ((2 - 0.02) / 2) + 0.02
-            norm_factors['m'] = 5
+            norm_factors['max'] = max_val
+            norm_factors['min'] = min_val
+            norm_factors['b'] = ((max_val - min_val) / 2) + min_val
+            norm_factors['m'] = m
 
             gene_obj.add_norm_factors(norm_factors)
-            gene_obj.add_max_exp(2)
+            gene_obj.add_max_exp(max_val)
             network_dict[temp_gene] = gene_obj
         self.network_dict = network_dict
 
