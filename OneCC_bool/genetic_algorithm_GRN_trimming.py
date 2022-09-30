@@ -46,7 +46,7 @@ def define_transition(state_dict):
         transition_dict[lineage] = temp_df
     return transition_dict
 
-# TODO make sure it only takes TFs 
+# TODO make sure to error check if all the Tfs are indeed in the matrix 
 def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, samp_tab, cluster_id = "leiden", pt_id = "dpt_pseudotime",act_tolerance = 0.01, filter_dup_state = True, selected_regulators = list()):
     # this is to prototype the training data required 
     # potential_regulators_dict = dict()
@@ -312,7 +312,12 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
             processed_feature_matrix = processed_feature_matrix.loc[:, list(feature_pattern_dict.values())]
         
         if len(selected_regulators) > 0:
-            processed_feature_matrix = processed_feature_matrix.loc[processed_feature_matrix.index.isin(selected_regulators), :]            
+            selected_regulators = list(selected_regulators)
+            selected_regulators.append(temp_gene)
+            if set(selected_regulators).issubset(set(processed_feature_matrix.index)) == True:
+                processed_feature_matrix = processed_feature_matrix.loc[processed_feature_matrix.index.isin(selected_regulators), :]            
+            else:
+                print("Some regulators are not in the expression matrix. All genes are used as regulators")
 
         training_set['features'] = processed_feature_matrix
         # set up priority list for each state in the case that we would need to assign priority in the genetic algorithm later on 
