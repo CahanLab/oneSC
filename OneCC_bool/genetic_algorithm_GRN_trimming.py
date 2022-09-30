@@ -46,12 +46,13 @@ def define_transition(state_dict):
         transition_dict[lineage] = temp_df
     return transition_dict
 
-def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, samp_tab, cluster_id = "leiden", pt_id = "dpt_pseudotime",act_tolerance = 0.01, filter_dup_state = True):
+# TODO make sure it only takes TFs 
+def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, samp_tab, cluster_id = "leiden", pt_id = "dpt_pseudotime",act_tolerance = 0.01, filter_dup_state = True, select_TFs = list()):
     # this is to prototype the training data required 
     # potential_regulators_dict = dict()
     training_dict = dict()
 
-    # TODO: maybe not hardcode this
+    # TODO: maybe not hardcode this. There should always have a lineage_0 
     all_genes = transition_dict['lineage_0'].index
 
     cluster_time_dict = dict()
@@ -59,13 +60,14 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
         sub_samp_tab = samp_tab.loc[samp_tab[cluster_id] == cluster, :]
         cluster_time_dict[cluster] = np.mean(sub_samp_tab[pt_id])
 
-    #NOTE this is to make the state priority dictionary 
+    #NOTE this is to make the state priority dictionary. I don't think we ever use the state priority for the reconstruction of the network 
+    # for the now, let's include those in here 
     state_priority_dict = dict()
     for temp_lineage in transition_dict.keys(): 
         temp_state_df = transition_dict[temp_lineage]
         for i in range(0, temp_state_df.shape[1]): 
             state_priority_dict[temp_state_df.columns[i]] = i + 1
-
+    
     for temp_gene in all_genes: 
 
         # get all the potential regulators 
@@ -308,10 +310,11 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
             # only select the unique states in feature matrix 
             # the order is not preserved...
             processed_feature_matrix = processed_feature_matrix.loc[:, list(feature_pattern_dict.values())]
-            training_set['features'] = processed_feature_matrix
-        else: 
-            training_set['features'] = processed_feature_matrix
         
+        if len(select_TFs) > 0:
+            processed_feature_matrix = processed_feature_matrix.loc[processed_feature_matrix.index.isin(select_TFs), :]            
+
+        training_set['features'] = processed_feature_matrix
         # set up priority list for each state in the case that we would need to assign priority in the genetic algorithm later on 
         state_priority = list()
         for temp_state in training_set['features'].columns:
