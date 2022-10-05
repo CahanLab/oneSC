@@ -46,7 +46,6 @@ def define_transition(state_dict):
         transition_dict[lineage] = temp_df
     return transition_dict
 
-# TODO make sure to error check if all the Tfs are indeed in the matrix 
 def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, samp_tab, cluster_id = "leiden", pt_id = "dpt_pseudotime",act_tolerance = 0.01, filter_dup_state = True, selected_regulators = list()):
     # this is to prototype the training data required 
     # potential_regulators_dict = dict()
@@ -313,7 +312,7 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
         
         if len(selected_regulators) > 0:
             selected_regulators = list(selected_regulators)
-            selected_regulators.append(temp_gene)
+            selected_regulators.append(temp_gene) # add self-regulation 
             if set(selected_regulators).issubset(set(processed_feature_matrix.index)) == True:
                 processed_feature_matrix = processed_feature_matrix.loc[processed_feature_matrix.index.isin(selected_regulators), :]            
             else:
@@ -501,6 +500,10 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
     # TODO generate an initial population pool 
     init_pop_pool = np.random.choice([0, -1, 1], size=(sol_per_pop, num_genes))
 
+    prev_1_fitness = 0 
+    prev_2_fitness = 0 
+    perfect_fitness_bool = False
+
     for run_cycle in list(range(0, max_iter)):
         fitness_function = min_features_fitness_func
         ga_instance_min = pygad.GA(num_generations=num_generations,
@@ -546,11 +549,20 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
             solution_fitness = first_solution_fitness
             init_pop_pool = ga_instance_min.population
         
-        perfect_fitness_bool = True
-        if solution_fitness < perfect_fitness: 
-            perfect_fitness_bool = False
+        
+        
+        if solution_fitness >= perfect_fitness: 
+            perfect_fitness_bool = True
+            
+        '''
         elif solution_fitness >= perfect_fitness: 
             break
+        '''
+        if solution_fitness == prev_1_fitness and solution_fitness == prev_2_fitness: 
+            break 
+        else: 
+            prev_1_fitness = prev_2_fitness
+            prev_2_fitness = solution_fitness
 
     new_edges_df = pd.DataFrame()
     
