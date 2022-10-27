@@ -332,16 +332,16 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
 def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators = list(), num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = False): 
 
     training_data = training_dict[target_gene]['features']
-    training_data_original = training_data.copy()
-
     if len(selected_regulators) > 0: 
         selected_regulators = np.append(selected_regulators, target_gene)
         selected_regulators = np.unique(selected_regulators)
         training_data = training_data.loc[selected_regulators, :]
 
-    training_data = training_data.loc[training_data.sum(axis = 1) > 0, :]
+    training_data_original = training_data.copy()
+
+    training_data = training_data.loc[training_data.sum(axis = 1) > 0, :] # remove genes that are not active in any states 
+    training_data = training_data.drop_duplicates() # remove duplicated genes with the same state profiles 
     
-    training_data = training_data.drop_duplicates()
     training_targets = training_dict[target_gene]['phenotype']
     feature_dict = dict()
 
@@ -353,10 +353,10 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
         gene_pattern = [str(x) for x in gene_pattern]
         return "_".join(gene_pattern)
 
+    # the below is to 
     for regulator in training_data_original.index: 
         gene_pattern = training_data_original.loc[regulator, :]
         x_str = to_string_pattern(gene_pattern)
-
         if x_str in feature_dict.keys():
             feature_dict[x_str] = np.concatenate([feature_dict[x_str], [regulator]])
         else:
@@ -364,10 +364,13 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
     
     # rename the training data 
     training_data.index = training_data.apply(to_string_pattern, axis = 1)
-    target_gene_pattern = to_string_pattern(training_data_original.loc[target_gene, :])
+    target_gene_pattern = to_string_pattern(training_data_original.loc[target_gene, :]) # get the TG self activation gene profile
 
-    if target_gene_pattern in training_data.index:
-        # if the self regulation pattern match with 
+    # the sole purpose of the code block below is to isolate the self-regulation out so that if there is a self-inhibiton, we will penalize that 
+    # or if we want to reduce self-activation, we can penalize that as well. The key is to find out where the index of the self-activation 
+    if target_gene_pattern in training_data.index: # if the self-activation profile exists in the training data...it really should unless it was consistently 0 across the board 
+        # if the self regulation pattern match with 1 or more other gene profile, then we isolate out self activation 
+        # in this case, it that self activation happens to be self-inhibition, then we penalize that  
         if len(feature_dict[target_gene_pattern]) > 1: # if the there are more than at least 1 other gene pattern that is the same as the self regulation
             feature_dict[target_gene_pattern] = feature_dict[target_gene_pattern][feature_dict[target_gene_pattern] != target_gene]
             feature_dict[target_gene + "_" + target_gene_pattern] = [target_gene]
@@ -381,7 +384,7 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
         # find where the index of self regulation
         self_reg_index = np.where(training_data.index == target_gene + "_" + target_gene_pattern)[0][0]
     else:
-        self_reg_index = -1 
+        self_reg_index = -1 # if for whatever reason 
 
     def calc_activation_prob(norm_dict, upTFs): 
         if len(upTFs) == 0: 
