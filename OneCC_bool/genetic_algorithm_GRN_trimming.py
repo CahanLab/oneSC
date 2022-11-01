@@ -329,13 +329,29 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
         training_dict[temp_gene] = training_set
     return training_dict
 
-def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators = list(), num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True): 
+def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators = list(), num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True, remove_bad_genes = False): 
+    def get_bad_genes(train_dict):
+        bad_genes = list()
+        first_run = True
+        for lineage in train_dict['bad_genes'].keys():
+            for cluster in train_dict['bad_genes'][lineage].keys():
+                temp_bad_genes = train_dict['bad_genes'][lineage][cluster]
+                if first_run == True:
+                    bad_genes = list(temp_bad_genes)
+                    first_run = False
+                else:
+                    bad_genes = np.intersect1d(bad_genes, list(temp_bad_genes))
+        return bad_genes
 
     training_data = training_dict[target_gene]['features']
     if len(selected_regulators) > 0: 
         selected_regulators = np.append(selected_regulators, target_gene)
         selected_regulators = np.unique(selected_regulators)
         training_data = training_data.loc[selected_regulators, :]
+
+    if remove_bad_genes == True: 
+        all_bad_genes = get_bad_genes(training_dict[target_gene])
+        training_data = training_data.loc[~training_data.index.isin(all_bad_genes), :]
 
     training_data_original = training_data.copy()
 
@@ -441,13 +457,15 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
         # remove self inhibition since it would not work unless we go on to protein level 
         if self_reg_index > -1:
             if solution[self_reg_index] == -1:
-                fitness_score = fitness_score - 3000
+                fitness_score = fitness_score - (3 * 1000)
             elif solution[self_reg_index] == 1:
                 if reduce_auto_reg == True:
                     fitness_score = fitness_score - 4 # remove unnecessary auto-activator. 
         
         # if it comes to non-reactive and reactive, pick the reactive gene 
         fitness_score = fitness_score + np.sum(training_data.loc[np.array(solution) != 0, :].sum()) * 0.01
+        if np.sum(np.abs(solution)) == 0: # if there are no regulation on the target gene, not even self regulation, then it's not acceptable
+            fitness_score = fitness_score - (3 * 1000)
         return fitness_score
 
     def min_features_fitness_func(solution, solution_idx):
@@ -479,8 +497,13 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
         if self_reg_index > -1:
             if solution[self_reg_index] == -1:
                 fitness_score = fitness_score - (3 * correct_scale)
-        
+            elif solution[self_reg_index] == 1:
+                if reduce_auto_reg == True:
+                    fitness_score = fitness_score - 4 # remove unnecessary auto-activator. 
+
         fitness_score = fitness_score + np.sum(training_data.loc[np.array(solution) != 0, :].sum()) * activated_bonus_scale
+        if np.sum(np.abs(solution)) == 0: # if there are no regulation on the target gene, not even self regulation, then it's not acceptable
+            fitness_score = fitness_score - 3000
         return fitness_score
 
     # the below are just parameters for the genetic algorithm  
@@ -591,7 +614,7 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
     return [new_edges_df, perfect_fitness_bool]
 
 # have the parameters in 
-def create_network(training_dict, initial_state, selected_regulators_dict = dict(), num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = False): 
+def create_network(training_dict, initial_state, selected_regulators_dict = dict(), num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = False, remove_bad_genes = False): 
     total_network = pd.DataFrame()
     for temp_gene in training_dict.keys():
         print("start fitting " + temp_gene )
@@ -604,7 +627,8 @@ def create_network(training_dict, initial_state, selected_regulators_dict = dict
                                                             max_iter = max_iter, 
                                                             num_parents_mating = num_parents_mating, 
                                                             sol_per_pop = sol_per_pop, 
-                                                            reduce_auto_reg = reduce_auto_reg)
+                                                            reduce_auto_reg = reduce_auto_reg, 
+                                                            remove_bad_genes = remove_bad_genes)
             if perfect_fitness_bool == False: # if the fitness does not satisify the reachability of all states, then use all the genes 
                 new_network, perfect_fitness_bool = GA_fit_data(training_dict, 
                                                                 temp_gene, 
@@ -614,7 +638,8 @@ def create_network(training_dict, initial_state, selected_regulators_dict = dict
                                                                 max_iter = max_iter, 
                                                                 num_parents_mating = num_parents_mating, 
                                                                 sol_per_pop = sol_per_pop, 
-                                                                reduce_auto_reg = reduce_auto_reg)
+                                                                reduce_auto_reg = reduce_auto_reg, 
+                                                                remove_bad_genes = remove_bad_genes)
         else:
             new_network, perfect_fitness_bool = GA_fit_data(training_dict, 
                                                             temp_gene, 
@@ -624,7 +649,8 @@ def create_network(training_dict, initial_state, selected_regulators_dict = dict
                                                             max_iter = max_iter, 
                                                             num_parents_mating = num_parents_mating, 
                                                             sol_per_pop = sol_per_pop, 
-                                                            reduce_auto_reg = reduce_auto_reg)
+                                                            reduce_auto_reg = reduce_auto_reg, 
+                                                            remove_bad_genes = remove_bad_genes)
         total_network = pd.concat([total_network, new_network])
     return total_network
 
