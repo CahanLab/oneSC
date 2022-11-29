@@ -329,7 +329,7 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
         training_dict[temp_gene] = training_set
     return training_dict
 
-def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators = list(), num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True, remove_bad_genes = False): 
+def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators = list(), num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True, remove_bad_genes = False, max_edge_first = False): 
     def get_bad_genes(train_dict):
         bad_genes = list()
         first_run = True
@@ -565,15 +565,26 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
         ga_instance_max.run()
         second_solution, second_solution_fitness, second_solution_idx = ga_instance_max.best_solution()
         
-        # favor the maximum fitness 
-        if second_solution_fitness + 2 > first_solution_fitness: #TODO figure out a more systematic way of favoring the maximum solution 
-            solution = second_solution
-            solution_fitness = second_solution_fitness
-            init_pop_pool = ga_instance_max.population
-        else:
-            solution = first_solution 
-            solution_fitness = first_solution_fitness
-            init_pop_pool = ga_instance_min.population
+        # for prototyping purposes 
+        if second_solution_fitness >= perfect_fitness and first_solution_fitness >= perfect_fitness:
+            #TODO 
+            if max_edge_first == False: 
+                solution = first_solution 
+                solution_fitness = first_solution_fitness
+                init_pop_pool = ga_instance_min.population
+            else:
+                solution = second_solution
+                solution_fitness = second_solution_fitness
+                init_pop_pool = ga_instance_max.population
+        else: 
+            if second_solution_fitness > first_solution_fitness:  
+                solution = second_solution
+                solution_fitness = second_solution_fitness
+                init_pop_pool = ga_instance_max.population
+            else:
+                solution = first_solution 
+                solution_fitness = first_solution_fitness
+                init_pop_pool = ga_instance_min.population
         
         
         
@@ -614,7 +625,7 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
     return [new_edges_df, perfect_fitness_bool]
 
 # have the parameters in 
-def create_network(training_dict, initial_state, selected_regulators_dict = dict(), num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = False, remove_bad_genes = False): 
+def create_network(training_dict, initial_state, selected_regulators_dict = dict(), num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True, remove_bad_genes = False, max_edge_first = False): 
     total_network = pd.DataFrame()
     for temp_gene in training_dict.keys():
         print("start fitting " + temp_gene )
@@ -628,7 +639,8 @@ def create_network(training_dict, initial_state, selected_regulators_dict = dict
                                                             num_parents_mating = num_parents_mating, 
                                                             sol_per_pop = sol_per_pop, 
                                                             reduce_auto_reg = reduce_auto_reg, 
-                                                            remove_bad_genes = remove_bad_genes)
+                                                            remove_bad_genes = remove_bad_genes, 
+                                                            max_edge_first = max_edge_first)
             if perfect_fitness_bool == False: # if the fitness does not satisify the reachability of all states, then use all the genes 
                 new_network, perfect_fitness_bool = GA_fit_data(training_dict, 
                                                                 temp_gene, 
@@ -639,7 +651,8 @@ def create_network(training_dict, initial_state, selected_regulators_dict = dict
                                                                 num_parents_mating = num_parents_mating, 
                                                                 sol_per_pop = sol_per_pop, 
                                                                 reduce_auto_reg = reduce_auto_reg, 
-                                                                remove_bad_genes = remove_bad_genes)
+                                                                remove_bad_genes = remove_bad_genes, 
+                                                                max_edge_first = max_edge_first)
         else:
             new_network, perfect_fitness_bool = GA_fit_data(training_dict, 
                                                             temp_gene, 
@@ -650,7 +663,8 @@ def create_network(training_dict, initial_state, selected_regulators_dict = dict
                                                             num_parents_mating = num_parents_mating, 
                                                             sol_per_pop = sol_per_pop, 
                                                             reduce_auto_reg = reduce_auto_reg, 
-                                                            remove_bad_genes = remove_bad_genes)
+                                                            remove_bad_genes = remove_bad_genes, 
+                                                            max_edge_first = max_edge_first)
         total_network = pd.concat([total_network, new_network])
     return total_network
 
