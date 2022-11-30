@@ -235,13 +235,16 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
 
                     # if we want to turn off the constant self-activation 
                     else:
+                        '''
                         if temp_state.columns[possible_feature_index - 1] in self_regulation_features.keys():
                             if self_regulation_features[temp_state.columns[possible_feature_index - 1]] == 1: 
                                 self_regulation_features[col_name] = 1
                             else:
                                 self_regulation_features[col_name] = 0
                         else:
-                            self_regulation_features[col_name] = 0         
+                            self_regulation_features[col_name] = 0   
+                        '''
+                        self_regulation_features[col_name] = 0      
                 raw_feature_matrix[col_name] = cur_col
         
             # add the steady state profile as a seperate training data point 
