@@ -459,8 +459,8 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
             if solution[self_reg_index] == -1:
                 fitness_score = fitness_score - (3 * 1000)
             elif solution[self_reg_index] == 1:
-                if reduce_auto_reg == True:
-                    fitness_score = fitness_score - 4 # remove unnecessary auto-activator. 
+                if reduce_auto_reg == False:
+                    fitness_score = fitness_score + 4 # remove unnecessary auto-activator. 
         
         # if it comes to non-reactive and reactive, pick the reactive gene 
         fitness_score = fitness_score + np.sum(training_data.loc[np.array(solution) != 0, :].sum()) * 0.01
@@ -498,8 +498,8 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
             if solution[self_reg_index] == -1:
                 fitness_score = fitness_score - (3 * correct_scale)
             elif solution[self_reg_index] == 1:
-                if reduce_auto_reg == True:
-                    fitness_score = fitness_score - 4 # remove unnecessary auto-activator. 
+                if reduce_auto_reg == False:
+                    fitness_score = fitness_score + 4 # remove unnecessary auto-activator. 
 
         fitness_score = fitness_score + np.sum(training_data.loc[np.array(solution) != 0, :].sum()) * activated_bonus_scale
         if np.sum(np.abs(solution)) == 0: # if there are no regulation on the target gene, not even self regulation, then it's not acceptable
@@ -585,8 +585,6 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
                 solution = first_solution 
                 solution_fitness = first_solution_fitness
                 init_pop_pool = ga_instance_min.population
-        
-        
         
         if solution_fitness >= perfect_fitness: 
             perfect_fitness_bool = True
