@@ -494,8 +494,9 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
                 temp_score = int(total_prob == training_targets[i]) * correct_scale
             correctness_sum = correctness_sum + temp_score
 
-        fitness_score = correctness_sum + (np.sum(solution == 0) * 1) + (np.sum(solution == -1) * 0.1) #if an edge can be either activator or inhibitor, choose activator 
-    
+        #fitness_score = correctness_sum + (np.sum(solution == 0) * 1) + (np.sum(solution == -1) * 0.1) #if an edge can be either activator or inhibitor, choose activator 
+        fitness_score = correctness_sum + (np.sum(solution == 0) * 1) #minimize the number of edges 
+
         # penalize the self inhibitors
         if self_reg_index > -1:
             if solution[self_reg_index] == -1:
@@ -504,7 +505,7 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
                 if reduce_auto_reg == False:
                     fitness_score = fitness_score + 4 # remove unnecessary auto-activator. 
 
-        fitness_score = fitness_score + np.sum(training_data.loc[np.array(solution) != 0, :].sum()) * activated_bonus_scale
+        fitness_score = fitness_score + np.sum(training_data.loc[np.array(solution) != 0, :].sum()) * activated_bonus_scale # favor genes that are turned on across more states 
         if np.sum(np.abs(solution)) == 0: # if there are no regulation on the target gene, not even self regulation, then it's not acceptable
             fitness_score = fitness_score - 3000
         return fitness_score
