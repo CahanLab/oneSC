@@ -101,3 +101,13 @@ def select_regulators_time_series(lineage_time_change_dict, activation_window = 
             else:
                 potential_reg_dict[temp_gene] = np.unique(sub_df['gene'])
     return potential_reg_dict
+
+def rank_potential_regulators(train_exp):
+    correlation_matrix = np.corrcoef(train_exp)
+    regulator_dict = dict()
+    for temp_index in range(0, len(train_exp.index)):
+        temp_corr = correlation_matrix[temp_index]
+        ordered_regulators = train_exp.index[np.argsort(-np.abs(temp_corr))]
+        ordered_regulators = np.array(ordered_regulators)
+        regulator_dict[train_exp.index[temp_index]] = ordered_regulators
+    return regulator_dict
