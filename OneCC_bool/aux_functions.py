@@ -2,6 +2,9 @@ from sklearn.decomposition import PCA
 import umap
 import numpy as np 
 import pandas as pd
+from statsmodels.sandbox.stats.multicomp import multipletests
+from pygam import GAM, s,l
+
 def UMAP_embedding_train(train_exp): 
     """Calculate UMAP embedder based on top 9 PCs 
 
