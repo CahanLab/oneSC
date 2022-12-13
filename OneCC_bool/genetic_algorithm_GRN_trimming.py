@@ -690,7 +690,7 @@ def GA_fit_data_min(training_dict, target_gene, initial_state, selected_regulato
         selected_regulators = np.append(selected_regulators, target_gene)
         selected_regulators = np.unique(selected_regulators)
         training_data = training_data.loc[selected_regulators, :]
-        
+
     if remove_bad_genes == True: 
         all_bad_genes = get_bad_genes(training_dict[target_gene])
         training_data = training_data.loc[~training_data.index.isin(all_bad_genes), :]
@@ -803,7 +803,8 @@ def GA_fit_data_min(training_dict, target_gene, initial_state, selected_regulato
             elif solution[self_reg_index] == 1:
                 if reduce_auto_reg == False:
                     fitness_score = fitness_score + 4 # remove unnecessary auto-activator. 
-        
+                else:
+                    fitness_score = fitness_score - 4
         # if it comes to non-reactive and reactive, pick the reactive gene 
         fitness_score = fitness_score + np.sum(training_data.loc[np.array(solution) != 0, :].sum()) * 0.01
         if np.sum(np.abs(solution)) == 0: # if there are no regulation on the target gene, not even self regulation, then it's not acceptable
@@ -843,7 +844,8 @@ def GA_fit_data_min(training_dict, target_gene, initial_state, selected_regulato
             elif solution[self_reg_index] == 1:
                 if reduce_auto_reg == False:
                     fitness_score = fitness_score + 4 # remove unnecessary auto-activator. 
-
+                else:
+                    fitness_score = fitness_score - 4
         fitness_score = fitness_score + np.sum(training_data.loc[np.array(solution) != 0, :].sum()) * activated_bonus_scale # favor genes that are turned on across more states 
         if np.sum(np.abs(solution)) == 0: # if there are no regulation on the target gene, not even self regulation, then it's not acceptable
             fitness_score = fitness_score - 3000
@@ -968,7 +970,7 @@ def GA_fit_data_min(training_dict, target_gene, initial_state, selected_regulato
         reg_rank = reg_rank[intersect_index]
         intersect_genes = intersect_genes[np.argsort(reg_rank)]
 
-        if len(intersect_genes) > 1:
+        if len(intersect_genes) > max_dup_genes:
             intersect_genes = intersect_genes[0:max_dup_genes]
 
         for regulator in intersect_genes:
@@ -982,18 +984,45 @@ def create_network_min(training_dict, initial_state, selected_regulators_dict = 
     total_network = pd.DataFrame()
     for temp_gene in training_dict.keys():
         print("start fitting " + temp_gene )
-        new_network, perfect_fitness_bool = GA_fit_data_min(training_dict, 
-                                                        temp_gene, 
-                                                        initial_state, 
-                                                        selected_regulators = selected_regulators_dict[temp_gene], 
-                                                        regulators_rank = regulators_rank_dict[temp_gene],
-                                                        num_generations = num_generations, 
-                                                        max_iter = max_iter, 
-                                                        num_parents_mating = num_parents_mating, 
-                                                        sol_per_pop = sol_per_pop, 
-                                                        reduce_auto_reg = reduce_auto_reg, 
-                                                        remove_bad_genes = remove_bad_genes, 
-                                                        max_edge_first = max_edge_first, 
-                                                        max_dup_genes = max_dup_genes)
+        if temp_gene in selected_regulators_dict.keys():
+            new_network, perfect_fitness_bool = GA_fit_data_min(training_dict, 
+                                                            temp_gene, 
+                                                            initial_state, 
+                                                            selected_regulators = selected_regulators_dict[temp_gene], 
+                                                            regulators_rank = regulators_rank_dict[temp_gene],
+                                                            num_generations = num_generations, 
+                                                            max_iter = max_iter, 
+                                                            num_parents_mating = num_parents_mating, 
+                                                            sol_per_pop = sol_per_pop, 
+                                                            reduce_auto_reg = reduce_auto_reg, 
+                                                            remove_bad_genes = remove_bad_genes, 
+                                                            max_edge_first = max_edge_first, 
+                                                            max_dup_genes = max_dup_genes)
+            if perfect_fitness_bool == False:
+                new_network, perfect_fitness_bool = GA_fit_data_min(training_dict, 
+                                                temp_gene, 
+                                                initial_state, 
+                                                regulators_rank = regulators_rank_dict[temp_gene],
+                                                num_generations = num_generations, 
+                                                max_iter = max_iter, 
+                                                num_parents_mating = num_parents_mating, 
+                                                sol_per_pop = sol_per_pop, 
+                                                reduce_auto_reg = reduce_auto_reg, 
+                                                remove_bad_genes = remove_bad_genes, 
+                                                max_edge_first = max_edge_first, 
+                                                max_dup_genes = max_dup_genes)
+        else:
+            new_network, perfect_fitness_bool = GA_fit_data_min(training_dict, 
+                                                temp_gene, 
+                                                initial_state, 
+                                                regulators_rank = regulators_rank_dict[temp_gene],
+                                                num_generations = num_generations, 
+                                                max_iter = max_iter, 
+                                                num_parents_mating = num_parents_mating, 
+                                                sol_per_pop = sol_per_pop, 
+                                                reduce_auto_reg = reduce_auto_reg, 
+                                                remove_bad_genes = remove_bad_genes, 
+                                                max_edge_first = max_edge_first, 
+                                                max_dup_genes = max_dup_genes)
         total_network = pd.concat([total_network, new_network])
     return total_network

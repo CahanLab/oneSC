@@ -20,7 +20,7 @@ def find_genes_time_change(train_st, train_exp, lineage_cluster_dict, cluster_co
     for temp_gene in sub_train_exp.index: 
         time_series = pd.DataFrame()
         time_series['expression'] = sub_train_exp.loc[temp_gene, :]
-        time_series['PseudoTime'] = train_st[pt_col]
+        time_series['PseudoTime'] = sub_train_st[pt_col]
 
         smoothed_series = bin_smooth(time_series, pseudoTime_bin, smooth_style = smooth_style, spline_ME = 0.1)
         smoothed_series['boolean'] = smoothed_series['expression'] > vector_thresh[temp_gene]
