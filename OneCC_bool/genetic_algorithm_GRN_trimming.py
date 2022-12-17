@@ -1035,7 +1035,11 @@ def create_network_iter(training_dict, initial_state, regulators_rank_dict = dic
         else:
             rank_regulators_list = list()
 
-        for end_index in list(range(3, len(rank_regulators_list))):
+        if len(rank_regulators_list) < 3: 
+            rank_list = [len(rank_regulators_list)]
+        else: 
+            rank_list = list(range(3, len(rank_regulators_list)))
+        for end_index in rank_list:
             sub_rank_reg_list = rank_regulators_list[0:end_index]
             new_network, perfect_fitness_bool = GA_fit_data(training_dict, 
                                                             temp_gene, 
