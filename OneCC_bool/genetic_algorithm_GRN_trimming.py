@@ -667,6 +667,7 @@ def create_network_old(training_dict, initial_state, selected_regulators_dict = 
                                                             reduce_auto_reg = reduce_auto_reg, 
                                                             remove_bad_genes = remove_bad_genes, 
                                                             max_edge_first = max_edge_first)
+        
         total_network = pd.concat([total_network, new_network])
     return total_network
 
@@ -945,10 +946,6 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
 
     new_edges_df = pd.DataFrame()
     
-    if perfect_fitness_bool == False: 
-        print(target_gene + " does not fit perfectly")
-        print(str(solution_fitness) + "/" + str(perfect_fitness))
-    
     for i in range(0, training_data.shape[0]):
         if solution[i] == 0:
             continue
@@ -1024,6 +1021,8 @@ def create_network(training_dict, initial_state, selected_regulators_dict = dict
                                             max_edge_first = max_edge_first, 
                                             max_dup_genes = max_dup_genes)
         total_network = pd.concat([total_network, new_network])
+        if perfect_fitness_bool == False: 
+            print(temp_gene + " does not fit perfectly")
     return total_network
 
 def create_network_iter(training_dict, initial_state, regulators_rank_dict = dict(), num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True, remove_bad_genes = False, max_edge_first = False, max_dup_genes = 2): 
