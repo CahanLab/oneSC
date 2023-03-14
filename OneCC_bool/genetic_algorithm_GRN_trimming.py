@@ -372,7 +372,7 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
     else: 
         perfect_fitness = training_data.shape[1] * 1000
 
-    # TODO generate an initial population pool 
+    # generate an initial population pool 
     init_pop_pool = np.random.choice([0, -1, 1], size=(sol_per_pop, num_genes))
 
     prev_1_fitness = 0 
@@ -414,7 +414,7 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
         ga_instance_max.run()
         second_solution, second_solution_fitness, second_solution_idx = ga_instance_max.best_solution()
         
-        # for prototyping purposes 
+        # If both solutions would output perfect reachability, then pick the one preferred by the user
         if second_solution_fitness >= perfect_fitness and first_solution_fitness >= perfect_fitness:
             if max_edge_first == False: 
                 solution = first_solution 
@@ -436,11 +436,8 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
         
         if solution_fitness >= perfect_fitness: 
             perfect_fitness_bool = True
-            
-        '''
-        elif solution_fitness >= perfect_fitness: 
-            break
-        '''
+
+        # if the fitness doesn't change for 3 rounds, then break 
         if solution_fitness == prev_1_fitness and solution_fitness == prev_2_fitness: 
             break 
         else: 
@@ -460,7 +457,7 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
         elif solution[i] == 1: 
             reg_type = "+"
         
-        #TODO This is where I would select the top regulator for each state 
+        # This is where I would select the top regulator for each state 
         if len(regulators_rank) == 0: 
             for regulator in feature_dict[x_str]:
                 temp_edge = pd.DataFrame(data = [[regulator, target_gene, reg_type]], columns = ['TF', 'TG', "Type"])
