@@ -47,289 +47,151 @@ def define_transition(state_dict):
     return transition_dict
 
 def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, samp_tab, cluster_id = "leiden", pt_id = "dpt_pseudotime",act_tolerance = 0.01, filter_dup_state = True, selected_regulators = list()):
-    # this is to prototype the training data required 
-    # potential_regulators_dict = dict()
-    training_dict = dict()
-
-    # TODO: maybe not hardcode this. There should always have a lineage_0 
     all_genes = transition_dict['lineage_0'].index
 
-    cluster_time_dict = dict()
-    for cluster in np.unique(samp_tab[cluster_id]):
-        sub_samp_tab = samp_tab.loc[samp_tab[cluster_id] == cluster, :]
-        cluster_time_dict[cluster] = np.mean(sub_samp_tab[pt_id])
+    def extract_steady_states(state_df, target_gene, lineage_name):
+        extract_ss_df = state_df.iloc[:, -1:].copy()
+        extract_ss_df.columns = extract_ss_df.columns + "_SS_" + lineage_name
+        target_gene_state = [extract_ss_df.loc[target_gene, extract_ss_df.columns[0]]]
+        prior_df = state_df.iloc[:, -2]
+        if prior_df[target_gene] == 1:
+            extract_ss_df.loc[target_gene, extract_ss_df.columns[0]] = 1
+        else:
+            extract_ss_df.loc[target_gene, extract_ss_df.columns[0]] = 0
+        return [target_gene_state, extract_ss_df]
 
-    #NOTE this is to make the state priority dictionary. I don't think we ever use the state priority for the reconstruction of the network 
-    # for the now, let's include those in here 
-    state_priority_dict = dict()
-    for temp_lineage in transition_dict.keys(): 
-        temp_state_df = transition_dict[temp_lineage]
-        for i in range(0, temp_state_df.shape[1]): 
-            state_priority_dict[temp_state_df.columns[i]] = i + 1
-    
+    def extract_stable_state(state_df, target_gene, exclude_index_list, lineage_name):
+        if len(exclude_index_list) == 0:
+            extract_stable_df = state_df.drop(state_df.columns[np.array([0, state_df.shape[1] - 1])], axis = 1).copy()
+        else:
+            exclude_index_list = np.append(exclude_index_list, 0)
+            exclude_index_list = np.append(exclude_index_list, state_df.shape[1] - 1)
+            exclude_index_list = np.unique(exclude_index_list)
+            extract_stable_df = state_df.drop(state_df.columns[exclude_index_list], axis = 1).copy()
+
+        # if there are no stable state 
+        if extract_stable_df.shape[1] == 0:
+            return [[], pd.DataFrame()]
+        
+        target_gene_state = list(extract_stable_df.loc[target_gene, :])
+        for state in extract_stable_df.columns:
+            prev_index = np.where(state_df.columns == state)[0][0] - 1
+            if prev_index < 0:
+                continue
+            else:
+                prior_state = state_df.iloc[:, prev_index]
+                if prior_state[target_gene] == 1:
+                    extract_stable_df.loc[target_gene, state] = 1
+                else:
+                    extract_stable_df.loc[target_gene, state] = 0
+        extract_stable_df.columns = extract_stable_df.columns + "_stable_" + lineage_name
+        return [target_gene_state, extract_stable_df]
+
+    def check_stable_initial(trans_dict, target_gene):
+        for temp_lineage in trans_dict.keys():
+            temp_transition = trans_dict[temp_lineage]
+            if 0 in np.where(temp_transition.loc[target_gene, :] != 0)[0] - 1:
+                return False
+        return True
+
+    def extract_stable_initial_state(state_dict, target_gene, initial_stability = True):
+        if initial_stability == True:
+            temp_state = state_dict['lineage_0']
+            extract_ss_initial_df = temp_state.iloc[:, 0:1].copy()
+            extract_ss_initial_df.columns = extract_ss_initial_df.columns + "_initial_SS_all"
+            target_gene_state = [extract_ss_initial_df.loc[target_gene, extract_ss_initial_df.columns[0]]]
+            return [target_gene_state, extract_ss_initial_df]
+        else:
+            return [[], pd.DataFrame()]
+
+    def extract_unstable_state(state_df, transition_df, time_change_df, target_gene, exclude_index_list, samp_tab, cluster_id, pt_id, act_tolerance = 0.01):
+        target_gene_state = []
+        extract_unstable_df = pd.DataFrame()
+
+        def find_potential_regulators(transition_df, time_change_df, target_gene, exclude_index, cluster_id, pt_id, act_tolerance):
+            changing_genes = transition_df.index[transition_df.iloc[:, exclude_index + 1] != 0]
+            potential_regulators = []
+            min_time = np.median(samp_tab.loc[samp_tab[cluster_id] == transition_df.columns[exclude_index], pt_id]) 
+            max_time = np.max(samp_tab.loc[samp_tab[cluster_id] == transition_df.columns[exclude_index + 1], pt_id]) 
+            temp_time_change_df = time_change_df.loc[np.logical_and(time_change_df['PseudoTime'] >= min_time, time_change_df['PseudoTime'] <= max_time), :]
+            target_gene_status = transition_df.iloc[:, exclude_index + 1][target_gene]
+            
+            if target_gene_status == 1:
+                target_gene_act_df = temp_time_change_df.loc[np.logical_and(temp_time_change_df['gene'] == target_gene, temp_time_change_df['type'] == "+"), :]
+            else:
+                target_gene_act_df = temp_time_change_df.loc[np.logical_and(temp_time_change_df['gene'] == target_gene, temp_time_change_df['type'] == "-"), :]
+            if target_gene_act_df.shape[0] == 0:
+                target_gene_act = min_time # the change occured earlier than median of previous cluster
+            else:
+                target_gene_act = target_gene_act_df.iloc[target_gene_act_df.shape[0] - 1, :]['PseudoTime']
+            
+            for temp_changing_gene in changing_genes:
+                regulator_gene_status = transition_df.iloc[:, exclude_index + 1][temp_changing_gene]
+                if regulator_gene_status == 1:
+                    regulator_gene_act_df = temp_time_change_df.loc[np.logical_and(temp_time_change_df['gene'] == temp_changing_gene, temp_time_change_df['type'] == "+"), :]
+                else:
+                    regulator_gene_act_df = temp_time_change_df.loc[np.logical_and(temp_time_change_df['gene'] == temp_changing_gene, temp_time_change_df['type'] == "-"), :]
+                if regulator_gene_act_df.shape[0] == 0:
+                    regulator_gene_act = min_time # the change occured earlier than median of previous cluster
+                else:
+                    regulator_gene_act = regulator_gene_act_df.iloc[regulator_gene_act_df.shape[0] - 1, :]['PseudoTime']
+                if regulator_gene_act < target_gene_act - act_tolerance:
+                    potential_regulators.append(temp_changing_gene)
+            return potential_regulators
+        
+        if len(exclude_index_list) == 0:
+            return [[], pd.DataFrame()]
+        for temp_index in exclude_index_list: 
+            target_gene_state.append(state_df.iloc[:, temp_index + 1][target_gene])
+            temp_extract_unstable_df = state_df.iloc[:, temp_index:temp_index + 1].copy()
+            potential_regulators = find_potential_regulators(transition_df, time_change_df, target_gene, temp_index, cluster_id, pt_id, act_tolerance)
+            for potential_regulator in potential_regulators:
+                temp_extract_unstable_df.loc[potential_regulator, temp_extract_unstable_df.columns[0]] = state_df.loc[potential_regulator, state_df.columns[temp_index + 1]]
+
+            extract_unstable_df = pd.concat([extract_unstable_df, temp_extract_unstable_df], axis = 1)
+        extract_unstable_df.columns = extract_unstable_df.columns + "_unstable"
+        return [target_gene_state, extract_unstable_df]
+
+    training_dict = dict()
     for temp_gene in all_genes: 
 
-        # get all the potential regulators 
-        potential_regulators = list() # TODO remove the potential regulators list and remove the prev index 
-        raw_feature_matrix = pd.DataFrame()
-        self_regulation_features = dict()
+        gene_status_label = []
+        feature_mat = pd.DataFrame()
 
-        # this is to store the bad genes 
-        bad_genes_dict = dict()
+        # get initial state if it is stable for the gene
+        stable_initial = check_stable_initial(transition_dict, temp_gene)
+        [temp_label, temp_feature] = extract_stable_initial_state(state_dict, temp_gene, stable_initial)
+        gene_status_label = gene_status_label + temp_label
+        feature_mat = pd.concat([feature_mat, temp_feature], axis = 1)
 
-        # loop through all the lineages to find appropriate potential regulators 
+        gene_train_dict = dict()
         for temp_lineage in transition_dict.keys():
-
             temp_transition = transition_dict[temp_lineage] # transition matrix 
             temp_state = state_dict[temp_lineage] # state matrix 
             temp_time_change = lineage_time_change_dict[temp_lineage] # time series 
             
             # find the index of the state before transition of temp_gene 
+            # the states that were right before a transition is not stable 
             prev_index_list = np.where(temp_transition.loc[temp_gene, :] != 0)[0] - 1
             prev_index_list = prev_index_list[prev_index_list > -1]
             
-            # find the index of transition of temp_gene 
-            cur_index_list = np.where(temp_transition.loc[temp_gene, :] != 0)[0]
-            cur_index_list = cur_index_list[cur_index_list > 0]
-            
-            # all the genes that changed in right before temp_gene transition gets logged 
-            # TODO remove anything related to potential_regulators 
-            for temp_index in prev_index_list: 
-                gene_transitions = temp_transition.iloc[:, temp_index].copy()
-                gene_transitions_2 = temp_transition.iloc[:, temp_index + 1].copy()
-                
-                gene_transitions = gene_transitions[gene_transitions != 0]
-                gene_transitions_2 = gene_transitions_2[gene_transitions_2 != 0] # check if the gene immediately changes at the current state 
-                
-                # select the genes that ONLY change in the previous state.
-                # with regards to the genes that also in the current state, there will be more strigent checks on that 
-                good_genes = np.setdiff1d(gene_transitions.index, gene_transitions_2.index)
-                potential_regulators = np.concatenate([potential_regulators, good_genes])
-            
-            # designate non-target genes 
-            not_regulator_genes_dict = dict()
+            # get the steady states 
+            [temp_label, temp_feature] = extract_steady_states(temp_state, temp_gene, temp_lineage)
+            gene_status_label = gene_status_label + temp_label
+            feature_mat = pd.concat([feature_mat, temp_feature], axis = 1)
 
-            # select the appropriate genes that change with the temp_gene 
-            for temp_index in cur_index_list: 
-                cell_type_1 = temp_transition.columns[temp_index - 1]
-                cell_type_2 = temp_transition.columns[temp_index]
-                
-                # select the time series data within a range 
-                min_time = np.median(samp_tab.loc[samp_tab[cluster_id] == cell_type_1, pt_id]) # TODO could consider median 
-                max_time = np.max(samp_tab.loc[samp_tab[cluster_id] == cell_type_2, pt_id]) # TODO probably median might make more sense
-                
-                # get all the transition  
-                gene_transitions = temp_transition.iloc[:, temp_index].copy()
-                gene_transitions = gene_transitions[gene_transitions != 0]
-                
-                sub_temp_time_change = temp_time_change.loc[np.logical_and(temp_time_change['PseudoTime'] >= min_time, temp_time_change['PseudoTime'] <= max_time), ].copy()
- 
+            # get stable states. aka genes in states that do not change immediately 
+            [temp_label, temp_feature] = extract_stable_state(temp_state, temp_gene, prev_index_list, temp_lineage)
+            gene_status_label = gene_status_label + temp_label
+            feature_mat = pd.concat([feature_mat, temp_feature], axis = 1)
 
-                # remove all the disagreement of transition 
-                # if temp_gene is suppose to transition into 1, then we remove all the instance at which temp_gene is transitioned into - from the time series 
-                if gene_transitions[temp_gene] == 1: 
-                    sub_temp_time_change = sub_temp_time_change.loc[np.logical_and(sub_temp_time_change['gene'] == temp_gene, sub_temp_time_change['type'] == "-") == False, :]
-                else:
-                    sub_temp_time_change = sub_temp_time_change.loc[np.logical_and(sub_temp_time_change['gene'] == temp_gene, sub_temp_time_change['type'] == "+") == False, :]
-                
-                # sort the values, and assign index 
-                sub_temp_time_change = sub_temp_time_change.sort_values("PseudoTime")
-                sub_temp_time_change.index = np.arange(0, sub_temp_time_change.shape[0])
-
-                # if the temp_gene is in the data 
-                # check if the sign matches 
-
-                if np.sum(sub_temp_time_change['gene'].isin([temp_gene])) > 0: 
-                    if gene_transitions[temp_gene] == 1: 
-                        sign = "+"
-                    else: 
-                        sign = "-"
-                    # if there are multiple 
-                    if np.sum(np.logical_and(sub_temp_time_change['gene'] == temp_gene, sub_temp_time_change['type'] == sign)) != 0:
-                        last_index = sub_temp_time_change['gene'].where(np.logical_and(sub_temp_time_change['gene'] == temp_gene, sub_temp_time_change['type'] == sign)).last_valid_index()
-                    else:
-                        # if the gene did not have the right change within the time frame 
-                        # skip...
-                        not_regulator_genes = np.array(gene_transitions.index)
-                        not_regulator_genes_dict[temp_index] = not_regulator_genes[not_regulator_genes != temp_gene]
-                        continue
-                else: 
-                    # if the target gene didn't even change within the time frame..aka before all the other genes 
-                    # skip this whole thing 
-                    not_regulator_genes = np.array(gene_transitions.index)
-                    not_regulator_genes_dict[temp_index] = not_regulator_genes[not_regulator_genes != temp_gene]
-                    continue
-                
-                cur_latest_time = sub_temp_time_change.loc[:, "PseudoTime"]
-                cur_latest_time = cur_latest_time[last_index] # find all the genes that changed before then
-        
-                cur_potential_regulators = np.array([])
-
-                for temp_gene_2 in gene_transitions.index:
-                    if temp_gene_2 == temp_gene: 
-                        continue 
-                        
-                    if gene_transitions[temp_gene_2] == 1: 
-                        sign = "+"
-                    else: 
-                        sign = "-"
-
-                    # if there exist a time point which the supposed change matches the time-series data 
-                    # which means the change occured within an observable time frame 
-                    if np.sum(np.logical_and(sub_temp_time_change['gene'] == temp_gene_2, sub_temp_time_change['type'] == sign)) > 0: 
-                        sub_temp_time_change_2 = sub_temp_time_change.loc[np.logical_and(sub_temp_time_change['gene'] == temp_gene_2, sub_temp_time_change['type'] == sign), :]
-                        sub_temp_time_change_2 = sub_temp_time_change_2.sort_values("PseudoTime") 
-                        sub_temp_time_change_2.index = np.arange(0, sub_temp_time_change_2.shape[0])
-                        
-                        latest_time = sub_temp_time_change_2.loc[:, "PseudoTime"] 
-                        latest_time = latest_time[0]
-
-                        # if the change time of potential regulator is much earlier than the change time of temp_gene
-                        if latest_time <= (cur_latest_time - act_tolerance):
-                            cur_potential_regulators = np.concatenate([cur_potential_regulators, [temp_gene_2]])   
-                        else:
-                            continue                              
-                    else: 
-                        # if there is not time point match, that suggest the change probably occured earlier than the observable time frame 
-                        latest_time = sub_temp_time_change.loc[:, "PseudoTime"] 
-                        latest_time = latest_time[latest_time.index[0]]
-                        if latest_time <= (cur_latest_time - act_tolerance):
-                            cur_potential_regulators = np.concatenate([cur_potential_regulators, [temp_gene_2]])    
-
-                not_regulator_genes = np.setdiff1d(gene_transitions.index, cur_potential_regulators)  
-                not_regulator_genes = np.array(not_regulator_genes)
-                not_regulator_genes_dict[temp_index] = not_regulator_genes[not_regulator_genes != temp_gene]
-
-            potential_regulators = np.unique(potential_regulators)
-
-            # this is to extract the features for training logicistic regressor 
-            possible_feature_index_list = np.arange(0, temp_transition.shape[1])
-            exclude_indexes = np.setdiff1d(prev_index_list, cur_index_list) # remove the all instance at which the previous configuration occurs 
-            
-            # loop through the possible feature index list 
-            possible_feature_index_list = np.setdiff1d(possible_feature_index_list, exclude_indexes) 
-
-            for possible_feature_index in possible_feature_index_list:
-                col_name = temp_state.columns[possible_feature_index]
-                cur_col = temp_state.iloc[:, possible_feature_index].copy()
-
-                # if it is indicated that we might have to change the genes
-                # find the genes that occured after the change of target gene 
-                # use the previous gene expression as feature 
-                # TODO change the not_regulator_genes_dict to something like -- occured after target gene change 
-                if possible_feature_index in not_regulator_genes_dict.keys():
-                    prev_col = temp_state.iloc[:, possible_feature_index - 1].copy()
-                    for not_regulator_gene in not_regulator_genes_dict[possible_feature_index]:
-                        cur_col[not_regulator_gene] = prev_col[not_regulator_gene]
-                
-                # this is to check the self regulation features 
-                # this is to add in self-regulation 
-                # NOTE: this part of the code is to add in the self-regulatory features 
-                # TODO: this code is quite confusing. Please make it more readable 
-                if possible_feature_index - 1 < 0: 
-                    self_regulation_features[col_name] = cur_col[temp_gene]
-                else: 
-                    prev_col = temp_state.iloc[:, possible_feature_index - 1].copy()
-                    if prev_col[temp_gene] == 1: 
-                        self_regulation_features[col_name] = 1
-
-                    # if we want to turn off the constant self-activation 
-                    else:
-                        '''
-                        if temp_state.columns[possible_feature_index - 1] in self_regulation_features.keys():
-                            if self_regulation_features[temp_state.columns[possible_feature_index - 1]] == 1: 
-                                self_regulation_features[col_name] = 1
-                            else:
-                                self_regulation_features[col_name] = 0
-                        else:
-                            self_regulation_features[col_name] = 0   
-                        '''
-                        self_regulation_features[col_name] = 0      
-                raw_feature_matrix[col_name] = cur_col
-        
-            # add the steady state profile as a seperate training data point 
-            # to ensure that the steady state will be maintained as steady state
-            raw_feature_matrix[temp_state.columns[-1] + "_SteadyState"] = temp_state[temp_state.columns[-1]]
-            bad_genes_dict[temp_lineage] = not_regulator_genes_dict    
-
-            # TODO this seems like the most logical place to add the steady state 
-            # TODO add logic for adding in the steady states 
-        if len(potential_regulators) == 0:
-            continue
-        training_set = dict()
-        training_set['phenotype'] = np.array(raw_feature_matrix.loc[temp_gene, :])
-        training_set['bad_genes'] = bad_genes_dict
-
-        # add in the self regulation 
-        processed_feature_matrix = raw_feature_matrix.copy()
-        for temp_col in processed_feature_matrix.columns:
-            if "_SteadyState" in temp_col: 
-                processed_feature_matrix.loc[temp_gene, temp_col] = self_regulation_features[temp_col.replace("_SteadyState", "")]
-            else:
-                processed_feature_matrix.loc[temp_gene, temp_col] = self_regulation_features[temp_col]
-
-        #potential_regulators = potential_regulators[potential_regulators != temp_gene]
-        potential_regulators = list(potential_regulators)
-        potential_regulators.append(temp_gene)
-        potential_regulators = np.unique(potential_regulators)
-
-        #training_set['features'] = processed_feature_matrix.loc[potential_regulators, :]
-
-        # check if the states should be unique 
-        if filter_dup_state == True: 
-            feature_pattern_dict = dict()
-            for column_name in processed_feature_matrix.columns: 
-                temp_processed_feature = processed_feature_matrix.loc[:, column_name]
-                temp_feat_list = list(temp_processed_feature)
-                temp_feat_list = [str(x) for x in temp_feat_list]
-                temp_feat_pattern = "-".join(temp_feat_list)
-                
-                # if the exact same gene pattern has been used before 
-                if temp_feat_pattern in feature_pattern_dict.keys():
-                    old_column_name = feature_pattern_dict[temp_feat_pattern]
-                    if cluster_time_dict[old_column_name.replace("_SteadyState", "")] < cluster_time_dict[column_name.replace("_SteadyState", "")]:
-                        feature_pattern_dict[temp_feat_pattern] = column_name
-                else:
-                    feature_pattern_dict[temp_feat_pattern] = column_name
-
-            # only select the unique states in phenotype 
-            # the order of the state should be preserved 
-            # unique_state_index = [x in list(feature_pattern_dict.values()) for x in processed_feature_matrix.columns]
-            #training_set['phenotype'] = training_set['phenotype'][unique_state_index]
-            temp_pheno_list = training_set['phenotype']
-            
-            pheno_dict = dict()
-            for i in range(0, len(temp_pheno_list)):
-                temp_state = processed_feature_matrix.columns[i]
-                pheno_dict[temp_state] = temp_pheno_list[i]
-            
-            new_pheno_list = np.array([])
-            for temp_state in list(feature_pattern_dict.values()):
-                new_pheno_list = np.append(new_pheno_list, pheno_dict[temp_state])
-
-            training_set['phenotype'] = new_pheno_list
-
-            # only select the unique states in feature matrix 
-            # the order is not preserved...
-            processed_feature_matrix = processed_feature_matrix.loc[:, list(feature_pattern_dict.values())]
-        
-        if len(selected_regulators) > 0:
-            selected_regulators = list(selected_regulators)
-            selected_regulators.append(temp_gene) # add self-regulation 
-            if set(selected_regulators).issubset(set(processed_feature_matrix.index)) == True:
-                processed_feature_matrix = processed_feature_matrix.loc[processed_feature_matrix.index.isin(selected_regulators), :]            
-            else:
-                print("Some regulators are not in the expression matrix. All genes are used as regulators")
-
-        training_set['features'] = processed_feature_matrix
-        # set up priority list for each state in the case that we would need to assign priority in the genetic algorithm later on 
-        state_priority = list()
-        for temp_state in training_set['features'].columns:
-            if "_SteadyState" in temp_state: 
-                temp_state = temp_state.replace("_SteadyState", "")
-            state_priority.append(state_priority_dict[temp_state])
-        training_set['state_priority'] = np.array(state_priority)
-        training_dict[temp_gene] = training_set
+            # get the unstable states
+            [temp_label, temp_feature] = extract_unstable_state(temp_state, temp_transition, temp_time_change, temp_gene, prev_index_list, samp_tab, cluster_id, pt_id, act_tolerance = 0.01)
+            gene_status_label = gene_status_label + temp_label
+            feature_mat = pd.concat([feature_mat, temp_feature], axis = 1)
+        gene_train_dict['feature_matrix'] = feature_mat.copy()
+        gene_train_dict['gene_status_labels'] = gene_status_label.copy()
+        training_dict[temp_gene] = gene_train_dict.copy()
     return training_dict
 
 def GA_fit_data_old(training_dict, target_gene, initial_state, selected_regulators = list(), num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True, remove_bad_genes = False, max_edge_first = False): 
@@ -670,7 +532,6 @@ def create_network_old(training_dict, initial_state, selected_regulators_dict = 
         
         total_network = pd.concat([total_network, new_network])
     return total_network
-
 
 def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators = list(), regulators_rank = list(), num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True, remove_bad_genes = False, max_edge_first = False, max_dup_genes = 2): 
     def get_bad_genes(train_dict):
