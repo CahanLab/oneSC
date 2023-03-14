@@ -104,7 +104,7 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
         else:
             return [[], pd.DataFrame()]
 
-    def extract_unstable_state(state_df, transition_df, time_change_df, target_gene, exclude_index_list, samp_tab, cluster_id, pt_id, act_tolerance = 0.01):
+    def extract_unstable_state(state_df, transition_df, time_change_df, target_gene, exclude_index_list, samp_tab, cluster_id, pt_id, lineage_name, act_tolerance = 0.01):
         target_gene_state = []
         extract_unstable_df = pd.DataFrame()
 
@@ -149,7 +149,7 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
                 temp_extract_unstable_df.loc[potential_regulator, temp_extract_unstable_df.columns[0]] = state_df.loc[potential_regulator, state_df.columns[temp_index + 1]]
 
             extract_unstable_df = pd.concat([extract_unstable_df, temp_extract_unstable_df], axis = 1)
-        extract_unstable_df.columns = extract_unstable_df.columns + "_unstable"
+        extract_unstable_df.columns = extract_unstable_df.columns + "_unstable_" + lineage_name 
         return [target_gene_state, extract_unstable_df]
 
     training_dict = dict()
@@ -186,7 +186,7 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
             feature_mat = pd.concat([feature_mat, temp_feature], axis = 1)
 
             # get the unstable states
-            [temp_label, temp_feature] = extract_unstable_state(temp_state, temp_transition, temp_time_change, temp_gene, prev_index_list, samp_tab, cluster_id, pt_id, act_tolerance)
+            [temp_label, temp_feature] = extract_unstable_state(temp_state, temp_transition, temp_time_change, temp_gene, prev_index_list, samp_tab, cluster_id, pt_id, temp_lineage, act_tolerance)
             gene_status_label = gene_status_label + temp_label
             feature_mat = pd.concat([feature_mat, temp_feature], axis = 1)
         
