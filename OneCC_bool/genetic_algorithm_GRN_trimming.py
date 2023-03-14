@@ -503,7 +503,6 @@ def create_network(training_dict, initial_state, selected_regulators_dict = dict
                                                         num_parents_mating = num_parents_mating, 
                                                         sol_per_pop = sol_per_pop, 
                                                         reduce_auto_reg = reduce_auto_reg, 
-                                                        remove_bad_genes = remove_bad_genes, 
                                                         max_edge_first = max_edge_first, 
                                                         max_dup_genes = max_dup_genes)
         if perfect_fitness_bool == False:
@@ -516,7 +515,6 @@ def create_network(training_dict, initial_state, selected_regulators_dict = dict
                                             num_parents_mating = num_parents_mating, 
                                             sol_per_pop = sol_per_pop, 
                                             reduce_auto_reg = reduce_auto_reg, 
-                                            remove_bad_genes = remove_bad_genes, 
                                             max_edge_first = max_edge_first, 
                                             max_dup_genes = max_dup_genes)
         total_network = pd.concat([total_network, new_network])
