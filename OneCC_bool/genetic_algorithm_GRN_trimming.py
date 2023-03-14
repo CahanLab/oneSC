@@ -46,7 +46,7 @@ def define_transition(state_dict):
         transition_dict[lineage] = temp_df
     return transition_dict
 
-def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, samp_tab, cluster_id = "leiden", pt_id = "dpt_pseudotime",act_tolerance = 0.01, filter_dup_state = True, selected_regulators = list()):
+def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, samp_tab, cluster_id = "leiden", pt_id = "dpt_pseudotime",act_tolerance = 0.01, selected_regulators = list()):
     all_genes = transition_dict['lineage_0'].index
 
     def extract_steady_states(state_df, target_gene, lineage_name):
@@ -186,9 +186,12 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
             feature_mat = pd.concat([feature_mat, temp_feature], axis = 1)
 
             # get the unstable states
-            [temp_label, temp_feature] = extract_unstable_state(temp_state, temp_transition, temp_time_change, temp_gene, prev_index_list, samp_tab, cluster_id, pt_id, act_tolerance = 0.01)
+            [temp_label, temp_feature] = extract_unstable_state(temp_state, temp_transition, temp_time_change, temp_gene, prev_index_list, samp_tab, cluster_id, pt_id, act_tolerance)
             gene_status_label = gene_status_label + temp_label
             feature_mat = pd.concat([feature_mat, temp_feature], axis = 1)
+        
+        if len(selected_regulators) != 0:
+            feature_mat = feature_mat.loc[selected_regulators, :]
         gene_train_dict['feature_matrix'] = feature_mat.copy()
         gene_train_dict['gene_status_labels'] = gene_status_label.copy()
         training_dict[temp_gene] = gene_train_dict.copy()
