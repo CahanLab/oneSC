@@ -147,8 +147,8 @@ def suggest_dynamic_genes(exp_tab, samp_tab, trajectory_dict, cluster_col, pt_co
     average_df['max_exp'] = max_exp_list 
     average_df['log2_change'] = None
     
-    average_df.loc[average_df['min_exp'] == 0, 'min_exp'] = 0.01
-    average_df.loc[average_df['max_exp'] == 0, 'max_exp'] = 0.01
+    average_df.loc[average_df['min_exp'] < 0.01, 'min_exp'] = 0.01
+    average_df.loc[average_df['max_exp'] < 0.01, 'max_exp'] = 0.01
 
     fold_change = np.array(average_df['max_exp'] / average_df['min_exp']).astype(float)
     average_df.loc[:, 'log2_change'] = np.log2(fold_change)
