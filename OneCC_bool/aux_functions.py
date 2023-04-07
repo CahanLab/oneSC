@@ -128,35 +128,65 @@ def gamFit(expMat,genes,celltime):
         gam = GAM(l(0)).fit(X,y)
         p = gam.statistics_['p_values'][0]
         return p
-    ans = expMat.loc[genes2][celltime.index].apply(fit_gam_per_gene,axis=1)
+    ans = expMat.loc[genes2, celltime.index].apply(fit_gam_per_gene,axis=1)
     return ans
 
-def suggest_dynamic_genes(exp_tab, samp_tab, cluster_col):
+def suggest_dynamic_genes(exp_tab, samp_tab, trajectory_dict, cluster_col, pt_col, adj_p_cutoff = 0.05, log2_change_cutoff = 1.5, min_exp_cutoff = 1):
     average_df = pd.DataFrame(data = None, index = exp_tab.index, columns = np.unique(samp_tab[cluster_col]))
+    min_exp_list = []
+    max_exp_list = []
     for gene in average_df.index: 
         for cell_type in np.unique(samp_tab[cluster_col]): 
             temp_samp_tab = samp_tab.loc[samp_tab[cluster_col] == cell_type, :]
             temp_exp = exp_tab.loc[gene, temp_samp_tab.index]
             average_df.loc[gene, cell_type] = np.mean(temp_exp)
-
-    average_df['min_exp'] = None
-    average_df['max_exp'] = None 
-    average_df['log2_change'] = None
-
-    for gene in average_df.index: 
-        min_exp = np.min(average_df.loc[gene, :].dropna())
-        max_exp = np.max(average_df.loc[gene, :].dropna())
-        
-        average_df.loc[gene, 'min_exp'] = min_exp
-        average_df.loc[gene, 'max_exp'] = max_exp 
+        min_exp_list.append(np.min(average_df.loc[gene, :]))
+        max_exp_list.append(np.max(average_df.loc[gene, :]))
     
-    average_df.loc[average_df['min_exp'] == 0, 'min_exp'] = 0.001
-    average_df.loc[average_df['max_exp'] == 0, 'max_exp'] = 0.001
+    average_df['min_exp'] = min_exp_list
+    average_df['max_exp'] = max_exp_list 
+    average_df['log2_change'] = None
+    
+    average_df.loc[average_df['min_exp'] == 0, 'min_exp'] = 0.01
+    average_df.loc[average_df['max_exp'] == 0, 'max_exp'] = 0.01
 
     fold_change = np.array(average_df['max_exp'] / average_df['min_exp']).astype(float)
     average_df.loc[:, 'log2_change'] = np.log2(fold_change)
+    average_df = average_df.loc[average_df['log2_change'] >= log2_change_cutoff, :].copy()
+    average_df = average_df.loc[average_df['max_exp'] >= min_exp_cutoff, :].copy()
 
-    return average_df
+    return_dict = dict()
+    for traj_name in trajectory_dict.keys():
+        sub_samp_tab = samp_tab.loc[samp_tab[cluster_col].isin(trajectory_dict[traj_name]), :].copy()
+        sub_exp_tab = exp_tab.loc[:, exp_tab.columns.isin(sub_samp_tab.index)].copy()
+
+        sub_samp_tab["dpt_groups"] = sub_samp_tab[cluster_col]
+        sub_samp_tab["pseudotime"] = sub_samp_tab[pt_col]
+        sub_samp_tab["cell_name"] = sub_samp_tab.index
+        path = np.unique(sub_samp_tab["dpt_groups"])
+        ids = []
+        for grp in path:
+            a = sub_samp_tab.loc[sub_samp_tab["dpt_groups"] == grp, :]
+            b = a["cell_name"]
+            ids = np.append(ids,b)
+        sub_samp_tab = sub_samp_tab.loc[ids,:]
+        sub_exp_tab = sub_exp_tab.loc[:, ids]
+        t1 = sub_samp_tab["pseudotime"]
+        t1C = t1[ids]
+
+        print("starting gamma...")
+        gpChr = pd.DataFrame(gamFit(sub_exp_tab.loc[average_df.index, t1C.index],average_df.index,t1))
+        gpChr.columns = ["dynamic_pval"]
+        gpChr['adj_pval'] = multipletests(gpChr['dynamic_pval'])[1]
+        gpChr = gpChr.loc[gpChr['adj_pval'] < adj_p_cutoff, :].copy()
+
+        sub_average_df = average_df.loc[gpChr.index, :].copy()
+        
+        output_df = pd.concat([sub_average_df, gpChr], axis=1)
+
+        return_dict[traj_name] = output_df.copy()
+
+    return return_dict
 
 def suggest_dynamic_TFs(exp_tab, samp_tab, tf_list, cluster_col, n_top_genes = 2000, adj_p_cutoff = 0.05, logfold_cutoff = 2, pct_exp_cutoff = 0.1):
     temp_adata = sc.AnnData(exp_tab.T)
