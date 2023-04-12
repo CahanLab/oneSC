@@ -159,6 +159,16 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
         extract_unstable_df.columns = extract_unstable_df.columns + "_unstable_" + lineage_name 
         return [target_gene_state, extract_unstable_df, unstable_states]
 
+    def extract_initial_auto(state_df, gene_id):
+        if state_df.loc[gene_id, state_df.columns[0]] == 1:
+            returned_df = state_df.loc[:, [state_df.columns[0]]].copy()
+            returned_df.loc[:, returned_df.columns[0]] = 0
+            returned_df.loc[gene_id, returned_df.columns[0]] = 1
+            returned_df.columns = returned_df.columns + "_autoregulation"
+            return [[1], returned_df]
+        else:
+            return [[], pd.DataFrame()]
+
     training_dict = dict()
     for temp_gene in all_genes: 
 
@@ -172,6 +182,11 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
         gene_status_label = gene_status_label + temp_label
         feature_mat = pd.concat([feature_mat, temp_feature], axis = 1).copy()
 
+        # get initial auto regulation 
+        [temp_label, temp_feature] = extract_initial_auto(state_dict['lineage_0'], temp_gene)
+        gene_status_label = gene_status_label + temp_label
+        feature_mat = pd.concat([feature_mat, temp_feature], axis = 1).copy()
+        
         # grab all the unstable states 
         unstable_states_list = []
         for temp_lineage in transition_dict.keys():
@@ -375,7 +390,7 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
     crossover_type = "uniform"
     
     mutation_type = "random"
-    mutation_percent_genes = 40
+    mutation_percent_genes = 10
     #mutation_percent_genes = [40, 10] # maybe try to use number of genes as 
 
     perfect_fitness = training_data.shape[1] * 1000
