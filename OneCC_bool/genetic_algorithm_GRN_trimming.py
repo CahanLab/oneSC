@@ -217,7 +217,7 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
         training_dict[temp_gene] = gene_train_dict.copy()
     return training_dict
 
-def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators = list(), regulators_rank = list(), num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True, max_edge_first = False, max_dup_genes = 2): 
+def GA_fit_data(training_dict, target_gene, selected_regulators = list(), regulators_rank = list(), num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True, max_edge_first = False, max_dup_genes = 2): 
     training_data = training_dict[target_gene]['feature_matrix']
     if len(selected_regulators) > 0: 
         selected_regulators = np.append(selected_regulators, target_gene)
@@ -488,7 +488,7 @@ def GA_fit_data(training_dict, target_gene, initial_state, selected_regulators =
             
     return [new_edges_df, perfect_fitness_bool]
 
-def create_network(training_dict, initial_state, selected_regulators_dict = dict(), regulators_rank_dict = dict(), num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True, remove_bad_genes = False, max_edge_first = False, max_dup_genes = 2): 
+def create_network(training_dict, selected_regulators_dict = dict(), regulators_rank_dict = dict(), num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True, max_edge_first = False, max_dup_genes = 2): 
     total_network = pd.DataFrame()
     for temp_gene in training_dict.keys():
         if temp_gene in selected_regulators_dict.keys():
@@ -503,7 +503,6 @@ def create_network(training_dict, initial_state, selected_regulators_dict = dict
 
         new_network, perfect_fitness_bool = GA_fit_data(training_dict, 
                                                         temp_gene, 
-                                                        initial_state, 
                                                         selected_regulators = selected_regulators_list, 
                                                         regulators_rank = regulators_rank_list,
                                                         num_generations = num_generations, 
@@ -516,7 +515,6 @@ def create_network(training_dict, initial_state, selected_regulators_dict = dict
         if perfect_fitness_bool == False:
             new_network, perfect_fitness_bool = GA_fit_data(training_dict, 
                                             temp_gene, 
-                                            initial_state, 
                                             regulators_rank = regulators_rank_list,
                                             num_generations = num_generations, 
                                             max_iter = max_iter, 
@@ -528,6 +526,36 @@ def create_network(training_dict, initial_state, selected_regulators_dict = dict
         total_network = pd.concat([total_network, new_network])
         if perfect_fitness_bool == False: 
             print(temp_gene + " does not fit perfectly")
+    return total_network
+
+def create_network_serial(training_dict, regulators_rank_dict = dict(), num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True, max_edge_first = False, max_dup_genes = 2):
+    total_network = pd.DataFrame()
+    for temp_gene in training_dict.keys():
+
+        if temp_gene in regulators_rank_dict.keys(): 
+            rank_regulators_list = regulators_rank_dict[temp_gene]
+        else:
+            rank_regulators_list = list()
+
+        if len(rank_regulators_list) < 4: 
+            rank_list = [len(rank_regulators_list)]
+        else: 
+            rank_list = list(range(4, len(rank_regulators_list) + 1))
+        for end_index in rank_list:
+            sub_rank_reg_list = rank_regulators_list[0:end_index]
+            new_network, perfect_fitness_bool = GA_fit_data(training_dict, 
+                                                            temp_gene, 
+                                                            selected_regulators = sub_rank_reg_list, 
+                                                            num_generations = num_generations, 
+                                                            max_iter = max_iter, 
+                                                            num_parents_mating = num_parents_mating, 
+                                                            sol_per_pop = sol_per_pop, 
+                                                            reduce_auto_reg = reduce_auto_reg, 
+                                                            max_edge_first = max_edge_first, 
+                                                            max_dup_genes = max_dup_genes)
+            if perfect_fitness_bool == True: 
+                break 
+        total_network = pd.concat([total_network, new_network])
     return total_network
 
 def create_network_iter(training_dict, initial_state, regulators_rank_dict = dict(), num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True, remove_bad_genes = False, max_edge_first = False, max_dup_genes = 2): 
