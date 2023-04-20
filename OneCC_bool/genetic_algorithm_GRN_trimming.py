@@ -627,12 +627,11 @@ def GA_fit_data_penalize(training_dict, target_gene, selected_regulators = list(
     for regulator in training_data_original.index: 
         gene_pattern = training_data_original.loc[regulator, :]
         x_str = to_string_pattern(gene_pattern)
+        rev_feature_dict[regulator] = x_str
         if x_str in feature_dict.keys():
             feature_dict[x_str] = np.concatenate([feature_dict[x_str], [regulator]])
-            rev_feature_dict[regulator] = x_str
         else:
             feature_dict[x_str] = np.array([regulator])
-            rev_feature_dict[regulator] = x_str
 
     # rename the training data 
     training_data.index = training_data.apply(to_string_pattern, axis = 1)
@@ -658,6 +657,7 @@ def GA_fit_data_penalize(training_dict, target_gene, selected_regulators = list(
     else:
         self_reg_index = -1 # if for whatever reason 
 
+    unlikely_activators = np.intersect1d(unlikely_activators, list(rev_feature_dict.keys()))
     # figure out the index at which bad activators occur 
     bad_activator_index = list()
     if len(unlikely_activators) > 0:
