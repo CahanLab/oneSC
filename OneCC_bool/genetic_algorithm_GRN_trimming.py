@@ -159,9 +159,54 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
         extract_unstable_df.columns = extract_unstable_df.columns + "_unstable_" + lineage_name 
         return [target_gene_state, extract_unstable_df, unstable_states]
 
+    def find_unlikely_activators(state_dict, gene_interest):
+        good_genes = np.array([])
+        for temp_lineage in state_dict.keys():
+            temp_state = state_dict[temp_lineage]
+            earliest_column = np.where(temp_state.loc[gene_interest, :] == 1)[0]
+            if len(earliest_column) == 0:
+                continue
+            else:
+                earliest_column = earliest_column[0]
+            
+            if earliest_column == 0: 
+                temp_good_genes = np.array(list(temp_state.index[temp_state.iloc[:, earliest_column] == 1]))
+                good_genes = np.concatenate([good_genes, temp_good_genes])
+            else:
+                temp_good_genes = np.array(list(temp_state.index[temp_state.iloc[:, earliest_column] == 1]))
+                good_genes = np.concatenate([good_genes, temp_good_genes])
+                temp_good_genes = np.array(list(temp_state.index[temp_state.iloc[:, earliest_column - 1] == 1]))
+                good_genes = np.concatenate([good_genes, temp_good_genes])
+        bad_genes = np.setdiff1d(all_genes, good_genes)
+        return bad_genes
+    
+    def find_unlikely_repressors(state_dict, gene_interest):
+        good_genes = np.array([])
+        for temp_lineage in state_dict.keys():
+            temp_state = state_dict[temp_lineage]
+            act_columns_index = np.where(temp_state.loc[gene_interest, :] == 0)[0]
+            if len(act_columns_index) == 0:
+                continue
+            for cur_column_index in act_columns_index:
+                if cur_column_index == 0:
+                    temp_good_genes = np.array(list(temp_state.index[temp_state.iloc[:, cur_column_index] == 1]))
+                    good_genes = np.concatenate([good_genes, temp_good_genes])
+                else:
+                    temp_good_genes = np.array(list(temp_state.index[temp_state.iloc[:, cur_column_index] == 1]))
+                    good_genes = np.concatenate([good_genes, temp_good_genes])
+                    temp_good_genes = np.array(list(temp_state.index[temp_state.iloc[:, cur_column_index - 1] == 1]))
+                    good_genes = np.concatenate([good_genes, temp_good_genes])
+        bad_genes = np.setdiff1d(all_genes, good_genes)
+        return bad_genes
+
     training_dict = dict()
     for temp_gene in all_genes: 
 
+        # find the unlike activators and repressors 
+        unlikely_activators = find_unlikely_activators(state_dict, temp_gene)
+        unlikely_repressors = find_unlikely_repressors(state_dict, temp_gene)
+
+        # The below will be for curate the training data 
         gene_status_label = []
         feature_mat = pd.DataFrame()
         gene_train_dict = dict()
@@ -214,6 +259,9 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
             feature_mat = feature_mat.loc[selected_regulators, :]
         gene_train_dict['feature_matrix'] = feature_mat.copy()
         gene_train_dict['gene_status_labels'] = gene_status_label.copy()
+        gene_train_dict['unlikely_activators'] = unlikely_activators.copy()
+        gene_train_dict['unlikely_repressors'] = unlikely_repressors.copy()
+
         training_dict[temp_gene] = gene_train_dict.copy()
     return training_dict
 
@@ -604,15 +652,17 @@ def create_network_iter(training_dict, initial_state, regulators_rank_dict = dic
         total_network = pd.concat([total_network, new_network])
     return total_network
 
-def GA_fit_data_penalize(training_dict, target_gene, selected_regulators = list(), regulators_rank = list(), unlikely_activators = list(), num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True, max_edge_first = False, max_dup_genes = 2): 
+def GA_fit_data_penalize(training_dict, target_gene, selected_regulators = list(), regulators_rank = list(), num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True, max_edge_first = False, max_dup_genes = 2): 
+    unlikely_activators = training_dict[target_gene]['unlikely_activators']
+    unlikely_repressors = training_dict[target_gene]['unlikely_repressors']
+
     training_data = training_dict[target_gene]['feature_matrix']
     if len(selected_regulators) > 0: 
         selected_regulators = np.append(selected_regulators, target_gene)
         selected_regulators = np.unique(selected_regulators)
         training_data = training_data.loc[selected_regulators, :]
 
-    training_data_original = training_data.copy()
-
+    training_data_original = training_data.copy() # save the dataframe after the removal of genes that are nto active in any states 
     training_data = training_data.loc[training_data.sum(axis = 1) > 0, :] # remove genes that are not active in any states 
     training_data = training_data.drop_duplicates() # remove duplicated genes with the same state profiles 
     
@@ -663,9 +713,21 @@ def GA_fit_data_penalize(training_dict, target_gene, selected_regulators = list(
     if len(unlikely_activators) > 0:
         for temp_bad_activator in unlikely_activators:
             str_pattern = rev_feature_dict[temp_bad_activator]
+            if not str_pattern in training_data.index:
+                continue
             bad_activator_index.append(np.where(training_data.index == str_pattern)[0][0])
         bad_activator_index = np.unique(bad_activator_index)
 
+    unlikely_repressors = np.intersect1d(unlikely_repressors, list(rev_feature_dict.keys()))
+    # figure out the index at which bad activators occur 
+    bad_repressors_index = list()
+    if len(unlikely_repressors) > 0:
+        for temp_bad_repressor in unlikely_repressors:
+            str_pattern = rev_feature_dict[temp_bad_repressor]
+            if not str_pattern in training_data.index:
+                continue
+            bad_repressors_index.append(np.where(training_data.index == str_pattern)[0][0])
+        bad_repressors_index = np.unique(bad_repressors_index)
     def calc_activation_prob(norm_dict, upTFs): 
         if len(upTFs) == 0: 
             return 1
@@ -717,6 +779,12 @@ def GA_fit_data_penalize(training_dict, target_gene, selected_regulators = list(
             for temp_index in bad_activator_index: 
                 if solution[temp_index] == 1: 
                     fitness_score = fitness_score - 40
+        
+        # penalize unlikely repressors
+        if len(bad_repressors_index) > 0: 
+            for temp_index in bad_repressors_index: 
+                if solution[temp_index] == -1: 
+                    fitness_score = fitness_score - 40
 
         # remove self inhibition since it would not work unless we go on to protein level 
         if self_reg_index > -1:
@@ -760,6 +828,12 @@ def GA_fit_data_penalize(training_dict, target_gene, selected_regulators = list(
                 if solution[temp_index] == 1: 
                     fitness_score = fitness_score - 40
         
+        # penalize unlikely repressors
+        if len(bad_repressors_index) > 0: 
+            for temp_index in bad_repressors_index: 
+                if solution[temp_index] == -1: 
+                    fitness_score = fitness_score - 40
+
         # penalize the self inhibitors
         if self_reg_index > -1:
             if solution[self_reg_index] == -1:
@@ -898,7 +972,7 @@ def GA_fit_data_penalize(training_dict, target_gene, selected_regulators = list(
             
     return [new_edges_df, perfect_fitness_bool]
 
-def create_network_penalize(training_dict, selected_regulators_dict = dict(), regulators_rank_dict = dict(), unlikley_activators_dict = dict(), num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True, max_edge_first = False, max_dup_genes = 2): 
+def create_network_penalize(training_dict, selected_regulators_dict = dict(), regulators_rank_dict = dict(), num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True, max_edge_first = False, max_dup_genes = 2): 
     total_network = pd.DataFrame()
     for temp_gene in training_dict.keys():
         if temp_gene in selected_regulators_dict.keys():
@@ -910,17 +984,11 @@ def create_network_penalize(training_dict, selected_regulators_dict = dict(), re
             regulators_rank_list = regulators_rank_dict[temp_gene]
         else:
             regulators_rank_list = list()
-
-        if temp_gene in unlikley_activators_dict.keys(): 
-            unlikely_activators_list = unlikley_activators_dict[temp_gene]
-        else:
-            unlikely_activators_list = list()
         
         new_network, perfect_fitness_bool = GA_fit_data_penalize(training_dict, 
                                                         temp_gene, 
                                                         selected_regulators = selected_regulators_list, 
                                                         regulators_rank = regulators_rank_list,
-                                                        unlikely_activators = unlikely_activators_list,
                                                         num_generations = num_generations, 
                                                         max_iter = max_iter, 
                                                         num_parents_mating = num_parents_mating, 
@@ -932,7 +1000,6 @@ def create_network_penalize(training_dict, selected_regulators_dict = dict(), re
             new_network, perfect_fitness_bool = GA_fit_data_penalize(training_dict, 
                                             temp_gene, 
                                             regulators_rank = regulators_rank_list,
-                                            unlikely_activators = unlikely_activators_list,
                                             num_generations = num_generations, 
                                             max_iter = max_iter, 
                                             num_parents_mating = num_parents_mating, 
