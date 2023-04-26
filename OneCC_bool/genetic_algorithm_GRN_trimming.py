@@ -182,8 +182,6 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
     
     def find_unlikely_repressors(state_dict, gene_interest):
         good_genes = np.array([])
-        good_genes2 = np.array([])
-
         for temp_lineage in state_dict.keys():
             temp_state = state_dict[temp_lineage]
             # this is for column index where the gene of interest is turned off 
@@ -199,23 +197,6 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
                     good_genes = np.concatenate([good_genes, temp_good_genes])
                     temp_good_genes = np.array(list(temp_state.index[temp_state.iloc[:, cur_column_index - 1] == 1]))
                     good_genes = np.concatenate([good_genes, temp_good_genes])
-            
-        '''
-            # this is for column index where the gene of interest is turned on 
-            act_columns_index = np.where(temp_state.loc[gene_interest, :] == 1)[0]
-            if len(act_columns_index) == 0:
-                continue
-            for cur_column_index in act_columns_index:
-                if cur_column_index == 0:
-                    temp_good_genes = np.array(list(temp_state.index[temp_state.iloc[:, cur_column_index] == 0]))
-                    good_genes2 = np.concatenate([good_genes2, temp_good_genes])
-                else:
-                    temp_good_genes = np.array(list(temp_state.index[temp_state.iloc[:, cur_column_index] == 0]))
-                    good_genes2 = np.concatenate([good_genes2, temp_good_genes])
-                    temp_good_genes = np.array(list(temp_state.index[temp_state.iloc[:, cur_column_index - 1] == 0]))
-                    good_genes2 = np.concatenate([good_genes2, temp_good_genes])
-        good_genes = np.intersect1d(good_genes, good_genes2)
-        '''
         bad_genes = np.setdiff1d(all_genes, good_genes)
         return bad_genes
 
