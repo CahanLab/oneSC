@@ -200,6 +200,47 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
         bad_genes = np.setdiff1d(all_genes, good_genes)
         return bad_genes
 
+    def check_feature_mat(feature_mat, col_index, gene_status):
+        def to_string_pattern(gene_pattern):
+            gene_pattern = [str(x) for x in gene_pattern]
+            return "_".join(gene_pattern)
+        remove_index = []
+        # categorize all the same gene pattern profiles into one 
+        same_pattern_dict = dict()
+        for temp_index in col_index:
+            string_pattern = to_string_pattern(feature_mat.iloc[:, temp_index])
+            if string_pattern not in same_pattern_dict.keys():
+                same_pattern_dict[string_pattern] = [temp_index]
+            else:
+                same_pattern_dict[string_pattern] = same_pattern_dict[string_pattern] + [temp_index]
+        for temp_key in same_pattern_dict.keys():
+            temp_index_list = same_pattern_dict[temp_key]
+            sub_gene_status = np.array(gene_status)[temp_index_list]
+            if len(np.unique(sub_gene_status)) > 1:
+                remove_index = remove_index + temp_index_list
+        return remove_index
+
+    def remove_conflicts(feature_mat, gene_status):
+        filter_df  = pd.DataFrame(data = None, index = feature_mat.columns, columns = ['ct', 'style', 'lineage', 'type'])   
+        for temp_state in filter_df.index:
+            filter_df.loc[temp_state, :] = temp_state.split("_")
+        filter_df['col_index'] = list(range(0, feature_mat.shape[1]))
+        state_meta = filter_df.copy()
+        filter_df = filter_df.loc[filter_df['style'] != 'SS', :].copy()
+        dup_states = filter_df['ct'].value_counts().index[filter_df['ct'].value_counts() > 1]
+        
+        remove_index_list = []
+        for temp_state in dup_states: 
+            sub_filter_df = filter_df.loc[filter_df['ct'] == temp_state, :]
+            temp_remove_index_list = check_feature_mat(feature_mat, list(sub_filter_df['col_index']), gene_status)
+            remove_index_list = remove_index_list + temp_remove_index_list
+        
+        new_feature_mat = feature_mat.drop(feature_mat.columns[remove_index_list], axis = 1).copy()
+        good_index = list(state_meta.loc[new_feature_mat.columns, :]['col_index'])
+        new_gene_status = np.array(gene_status)[good_index].copy()
+        new_gene_status = list(new_gene_status)
+        return [new_feature_mat, new_gene_status]
+    
     training_dict = dict()
     for temp_gene in all_genes: 
 
@@ -218,8 +259,6 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
         gene_status_label = gene_status_label + temp_label
         feature_mat = pd.concat([feature_mat, temp_feature], axis = 1).copy()
 
-        # grab all the unstable states 
-        unstable_states_list = []
         for temp_lineage in transition_dict.keys():
             temp_transition = transition_dict[temp_lineage] # transition matrix 
             temp_state = state_dict[temp_lineage] # state matrix 
@@ -231,38 +270,29 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
             prev_index_list = prev_index_list[prev_index_list > -1]
         
             # get the unstable states
-            returned_list = extract_unstable_state(temp_state, temp_transition, temp_time_change, temp_gene, prev_index_list, samp_tab, cluster_id, pt_id, temp_lineage, act_tolerance)
-            temp_label = returned_list[0]
-            temp_feature = returned_list[1]
-            unstable_states = returned_list[2]
+            [temp_label, temp_feature, unstable_states] = extract_unstable_state(temp_state, temp_transition, temp_time_change, temp_gene, prev_index_list, samp_tab, cluster_id, pt_id, temp_lineage, act_tolerance)
             gene_status_label = gene_status_label + temp_label
             feature_mat = pd.concat([feature_mat, temp_feature], axis = 1).copy()
-            unstable_states_list = unstable_states_list + unstable_states
-        
-        # list of states that are unstable across all trajectories 
-        unstable_states_list = np.unique(unstable_states_list)
-
-        for temp_lineage in transition_dict.keys():
-            temp_state = state_dict[temp_lineage] # state matrix 
             
+            # get stable states. aka genes in states that do not change immediately 
+            # TODO add an argument of all the unstable states so we can avoid them even if they are in a different lineage  
+            [temp_label, temp_feature] = extract_stable_state(temp_state, temp_gene, unstable_states, temp_lineage)
+            gene_status_label = gene_status_label + temp_label
+            feature_mat = pd.concat([feature_mat, temp_feature], axis = 1).copy()
+        
             # get the steady states 
             [temp_label, temp_feature] = extract_steady_states(temp_state, temp_gene, temp_lineage)
             gene_status_label = gene_status_label + temp_label
             feature_mat = pd.concat([feature_mat, temp_feature], axis = 1).copy()
 
-            # get stable states. aka genes in states that do not change immediately 
-            # TODO add an argument of all the unstable states so we can avoid them even if they are in a different lineage  
-            [temp_label, temp_feature] = extract_stable_state(temp_state, temp_gene, unstable_states_list, temp_lineage)
-            gene_status_label = gene_status_label + temp_label
-            feature_mat = pd.concat([feature_mat, temp_feature], axis = 1).copy()
-        
         if len(selected_regulators) != 0:
             feature_mat = feature_mat.loc[selected_regulators, :]
-        gene_train_dict['feature_matrix'] = feature_mat.copy()
-        gene_train_dict['gene_status_labels'] = gene_status_label.copy()
+
+        [new_feature_mat, new_gene_status] = remove_conflicts(feature_mat, gene_status_label)
+        gene_train_dict['feature_matrix'] = new_feature_mat.copy()
+        gene_train_dict['gene_status_labels'] = new_gene_status.copy()
         gene_train_dict['unlikely_activators'] = unlikely_activators.copy()
         gene_train_dict['unlikely_repressors'] = unlikely_repressors.copy()
-
         training_dict[temp_gene] = gene_train_dict.copy()
     return training_dict
 
