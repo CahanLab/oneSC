@@ -175,28 +175,39 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
             else:
                 temp_good_genes = np.array(list(temp_state.index[temp_state.iloc[:, earliest_column] == 1]))
                 good_genes = np.concatenate([good_genes, temp_good_genes])
-                temp_good_genes = np.array(list(temp_state.index[temp_state.iloc[:, earliest_column - 1] == 1]))
-                good_genes = np.concatenate([good_genes, temp_good_genes])
+                #temp_good_genes = np.array(list(temp_state.index[temp_state.iloc[:, earliest_column - 1] == 1]))
+                #good_genes = np.concatenate([good_genes, temp_good_genes])
         bad_genes = np.setdiff1d(all_genes, good_genes)
         return bad_genes
     
     def find_unlikely_repressors(state_dict, gene_interest):
         good_genes = np.array([])
+        init_round = True
         for temp_lineage in state_dict.keys():
             temp_state = state_dict[temp_lineage]
             # this is for column index where the gene of interest is turned off 
-            act_columns_index = np.where(temp_state.loc[gene_interest, :] == 0)[0]
+            act_columns_index = np.where(temp_state.loc[gene_interest, :] == 1)[0]
             if len(act_columns_index) == 0:
                 continue
             for cur_column_index in act_columns_index:
                 if cur_column_index == 0:
-                    temp_good_genes = np.array(list(temp_state.index[temp_state.iloc[:, cur_column_index] == 1]))
-                    good_genes = np.concatenate([good_genes, temp_good_genes])
+                    temp_good_genes = np.array(list(temp_state.index[temp_state.iloc[:, cur_column_index] == 0]))
+                    if init_round == True:
+                        good_genes = temp_good_genes
+                        init_round = False
+                    else:
+                        #good_genes = np.intersect1d(good_genes, temp_good_genes)
+                        good_genes = np.concatenate([good_genes, temp_good_genes])
                 else:
-                    temp_good_genes = np.array(list(temp_state.index[temp_state.iloc[:, cur_column_index] == 1]))
-                    good_genes = np.concatenate([good_genes, temp_good_genes])
-                    temp_good_genes = np.array(list(temp_state.index[temp_state.iloc[:, cur_column_index - 1] == 1]))
-                    good_genes = np.concatenate([good_genes, temp_good_genes])
+                    temp_good_genes = np.array(list(temp_state.index[temp_state.iloc[:, cur_column_index] == 0]))
+                    if init_round == True:
+                        good_genes = temp_good_genes
+                        init_round = False
+                    else:
+                        #good_genes = np.intersect1d(good_genes, temp_good_genes)
+                        good_genes = np.concatenate([good_genes, temp_good_genes])
+                        #temp_good_genes = np.array(list(temp_state.index[temp_state.iloc[:, cur_column_index - 1] == 0]))
+                        #good_genes = np.concatenate([good_genes, temp_good_genes])
         bad_genes = np.setdiff1d(all_genes, good_genes)
         return bad_genes
 
@@ -787,7 +798,7 @@ def GA_fit_data_penalize(training_dict, target_gene, selected_regulators = list(
                 total_repression = total_repression * (1 - norm_dict[TF])
             return total_repression
     
-    def max_features_fitness_func(solution, solution_idx):
+    def max_features_fitness_func(ga_instance, solution, solution_idx):
         correctness_sum = 0
 
         for i in range(0, len(training_data.columns)):
@@ -826,11 +837,13 @@ def GA_fit_data_penalize(training_dict, target_gene, selected_regulators = list(
                     fitness_score = fitness_score  
                 else:
                     fitness_score = fitness_score - 15 # remove unnecessary auto-activator.
+        
+        fitness_score = fitness_score + np.sum(training_data.loc[np.array(solution) != 0, :].sum()) * 0.001 # favor genes that are turned on across more states 
         if np.sum(np.abs(solution)) == 0: # if there are no regulation on the target gene, not even self regulation, then it's not acceptable
             fitness_score = fitness_score - (3 * 1000)
         return fitness_score
 
-    def min_features_fitness_func(solution, solution_idx):
+    def min_features_fitness_func(ga_instance, solution, solution_idx):
         correctness_sum = 0
         
         correct_scale = 1000
@@ -916,7 +929,8 @@ def GA_fit_data_penalize(training_dict, target_gene, selected_regulators = list(
                         mutation_type=mutation_type,
                         mutation_percent_genes=mutation_percent_genes, 
                         suppress_warnings = True,
-                        gene_space = [-1, 0, 1])
+                        gene_space = [-1, 0, 1], 
+                        random_seed = 2)
         ga_instance_min.run()
         first_solution, first_solution_fitness, first_solution_idx = ga_instance_min.best_solution()
         
@@ -933,7 +947,8 @@ def GA_fit_data_penalize(training_dict, target_gene, selected_regulators = list(
             mutation_type=mutation_type,
             mutation_percent_genes=mutation_percent_genes, 
             suppress_warnings = True,
-            gene_space = [-1, 0, 1])
+            gene_space = [-1, 0, 1], 
+            random_seed = 2)
         ga_instance_max.run()
         second_solution, second_solution_fitness, second_solution_idx = ga_instance_max.best_solution()
         
