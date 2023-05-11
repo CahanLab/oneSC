@@ -223,27 +223,5 @@ def suggest_dynamic_TFs(exp_tab, samp_tab, tf_list, cluster_col, n_top_genes = 2
     average_df = average_df.loc[average_df['pct_exp'] > pct_exp_cutoff, :].copy()
     return average_df
 
-def find_unlikely_activators(state_dict):
-    bad_activators_dict = dict()
-    all_genes = state_dict['lineage_0'].index
-    for temp_gene in all_genes:
-        good_genes = np.array([])
-        for temp_lineage in state_dict.keys():
-            temp_state = state_dict[temp_lineage]
-            earliest_column = np.where(temp_state.loc[temp_gene, :] == 1)[0]
-            if len(earliest_column) == 0:
-                continue
-            else:
-                earliest_column = earliest_column[0]
-            
-            if earliest_column == 0: 
-                temp_good_genes = np.array(list(temp_state.index[temp_state.iloc[:, earliest_column] == 1]))
-                good_genes = np.concatenate([good_genes, temp_good_genes])
-            else:
-                temp_good_genes = np.array(list(temp_state.index[temp_state.iloc[:, earliest_column] == 1]))
-                good_genes = np.concatenate([good_genes, temp_good_genes])
-                temp_good_genes = np.array(list(temp_state.index[temp_state.iloc[:, earliest_column - 1] == 1]))
-                good_genes = np.concatenate([good_genes, temp_good_genes])
-        bad_genes = np.setdiff1d(all_genes, good_genes)
-        bad_activators_dict[temp_gene] = bad_genes
-    return bad_activators_dict
+def calc_corr(train_exp):
+    return train_exp.T.corr()
