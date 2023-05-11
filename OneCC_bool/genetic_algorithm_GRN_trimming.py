@@ -161,22 +161,21 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
 
     def find_unlikely_activators(state_dict, gene_interest):
         good_genes = np.array([])
+        init_status = True
         for temp_lineage in state_dict.keys():
             temp_state = state_dict[temp_lineage]
+            all_genes = np.array(temp_state.index)
             earliest_column = np.where(temp_state.loc[gene_interest, :] == 1)[0]
             if len(earliest_column) == 0:
                 continue
             else:
                 earliest_column = earliest_column[0]
             
-            if earliest_column == 0: 
-                temp_good_genes = np.array(list(temp_state.index[temp_state.iloc[:, earliest_column] == 1]))
-                good_genes = np.concatenate([good_genes, temp_good_genes])
+            temp_good_genes = np.array(list(temp_state.index[temp_state.iloc[:, earliest_column] == 1]))
+            if init_status == True:
+                good_genes = np.array(temp_good_genes)
             else:
-                temp_good_genes = np.array(list(temp_state.index[temp_state.iloc[:, earliest_column] == 1]))
-                good_genes = np.concatenate([good_genes, temp_good_genes])
-                #temp_good_genes = np.array(list(temp_state.index[temp_state.iloc[:, earliest_column - 1] == 1]))
-                #good_genes = np.concatenate([good_genes, temp_good_genes])
+                good_genes = np.intersect1d([good_genes, temp_good_genes])
         bad_genes = np.setdiff1d(all_genes, good_genes)
         return bad_genes
 
@@ -306,16 +305,10 @@ def GA_fit_data(training_dict, target_gene, corr_matrix, ideal_edges = 2, num_ge
         elif len(upTFs) == 1: 
             return norm_dict[upTFs[0]]
         else: 
-            x1 = 0 
-            x2 = 0
-            for TF in upTFs: 
-                if x1 == 0: 
-                    x1 = norm_dict[TF]
-                elif x2 == 0: 
-                    x2 = norm_dict[TF]
-                    x1 = 1 - ((1 - x1) * (1 - x2))
-                    x2 = 0
-            return x1
+            for TF in upTFs:
+                if norm_dict[TF] == 1:
+                    return 1
+            return 0
 
     def calc_repression_prob(norm_dict, downTFs): 
         if len(downTFs) == 0: 
@@ -323,10 +316,10 @@ def GA_fit_data(training_dict, target_gene, corr_matrix, ideal_edges = 2, num_ge
         elif len(downTFs) == 1: 
             return 1 - norm_dict[downTFs[0]]
         else:
-            total_repression = 1
             for TF in downTFs: 
-                total_repression = total_repression * (1 - norm_dict[TF])
-            return total_repression
+                if norm_dict[TF] == 1:
+                    return 0
+            return 1
     
     def max_features_fitness_func(ga_instance, solution, solution_idx):
         correctness_sum = 0
@@ -387,9 +380,8 @@ def GA_fit_data(training_dict, target_gene, corr_matrix, ideal_edges = 2, num_ge
                 if check_direction_agreement(solution[temp_index], corr_col[temp_index]) == True:
                     fitness_score = fitness_score + (np.abs(corr_col[temp_index]) * 10)
                 else: 
-                    fitness_score = fitness_score - 10
+                    fitness_score = fitness_score - 15
 
-        fitness_score = fitness_score + np.sum(training_data.loc[np.array(solution) != 0, :].sum()) * 0.001 # favor genes that are turned on across more states 
         if np.sum(np.abs(solution)) == 0: # if there are no regulation on the target gene, not even self regulation, then it's not acceptable
             fitness_score = fitness_score - (3 * 1000)
         return fitness_score
@@ -447,15 +439,13 @@ def GA_fit_data(training_dict, target_gene, corr_matrix, ideal_edges = 2, num_ge
 
     new_edges_df = pd.DataFrame()
     
-    for i in range(0, training_data.shape[0]):
+    for i in range(0, len(solution)):
         if solution[i] == 0:
             continue
-
         if solution[i] == -1: 
             reg_type = "-"
         elif solution[i] == 1: 
             reg_type = "+"
-        
         temp_edge = pd.DataFrame(data = [[training_data.index[i], target_gene, reg_type]], columns = ['TF', 'TG', "Type"])
         new_edges_df = pd.concat([new_edges_df, temp_edge])
         
