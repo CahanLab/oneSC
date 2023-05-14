@@ -62,12 +62,17 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
 
     def extract_stable_state(state_df, target_gene, unstable_states_list, lineage_name):
         if len(unstable_states_list) == 0:
-            extract_stable_df = state_df.drop(state_df.columns[np.array([0, state_df.shape[1] - 1])], axis = 1).copy()
+            #extract_stable_df = state_df.drop(state_df.columns[np.array([0, state_df.shape[1] - 1])], axis = 1).copy()
+            extract_stable_df = state_df.drop(state_df.columns[int(state_df.shape[1] - 1)], axis = 1).copy()
         else:
-            exclude_index_list = np.array([0])
-            exclude_index_list = np.append(exclude_index_list, state_df.shape[1] - 1)
+            #exclude_index_list = np.array([0])
+            exclude_index_list = np.array([])
+            exclude_index_list = np.append(exclude_index_list, int(state_df.shape[1] - 1))
             exclude_index_list = np.unique(exclude_index_list)
-            extract_stable_df = state_df.drop(state_df.columns[exclude_index_list], axis = 1).copy()
+            if len(exclude_index_list) > 1:
+                extract_stable_df = state_df.drop(state_df.columns[exclude_index_list], axis = 1).copy()
+            elif len(exclude_index_list) == 1:
+                extract_stable_df = state_df.drop(state_df.columns[int(exclude_index_list[0])], axis = 1).copy()
             extract_stable_df = extract_stable_df.loc[:, extract_stable_df.columns.isin(unstable_states_list) == False].copy()
 
         # if there are no stable state 
@@ -214,6 +219,11 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
             temp_remove_index_list = check_feature_mat(feature_mat, list(sub_filter_df['col_index']), gene_status)
             remove_index_list = remove_index_list + temp_remove_index_list
         
+        
+        if len(remove_index_list) > 1: 
+            print(temp_gene + " have conflicting states, the below states are deleted")
+            print(list(feature_mat.columns[remove_index_list]))
+        
         new_feature_mat = feature_mat.drop(feature_mat.columns[remove_index_list], axis = 1).copy()
         good_index = list(state_meta.loc[new_feature_mat.columns, :]['col_index'])
         new_gene_status = np.array(gene_status)[good_index].copy()
@@ -233,11 +243,12 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
         gene_train_dict = dict()
 
         # get initial state if it is stable for the gene
+        '''
         stable_initial = check_stable_initial(transition_dict, temp_gene)
         [temp_label, temp_feature] = extract_stable_initial_state(state_dict, temp_gene, stable_initial)
         gene_status_label = gene_status_label + temp_label
         feature_mat = pd.concat([feature_mat, temp_feature], axis = 1).copy()
-
+        '''
         for temp_lineage in transition_dict.keys():
             temp_transition = transition_dict[temp_lineage] # transition matrix 
             temp_state = state_dict[temp_lineage] # state matrix 
@@ -247,7 +258,7 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
             # the states that were right before a transition is not stable 
             prev_index_list = np.where(temp_transition.loc[temp_gene, :] != 0)[0] - 1
             prev_index_list = prev_index_list[prev_index_list > -1]
-        
+            prev_index_list = [int(x) for x in prev_index_list]
             # get the unstable states
             [temp_label, temp_feature, unstable_states] = extract_unstable_state(temp_state, temp_transition, temp_time_change, temp_gene, prev_index_list, samp_tab, cluster_id, pt_id, temp_lineage, act_tolerance)
             gene_status_label = gene_status_label + temp_label
