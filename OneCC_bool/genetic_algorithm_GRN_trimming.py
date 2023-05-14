@@ -337,19 +337,19 @@ def GA_fit_data(training_dict, target_gene, corr_matrix, ideal_edges = 2, num_ge
             temp_score = int(total_prob == training_targets[i]) * 1000
 
             correctness_sum = correctness_sum + temp_score
-        fitness_score = correctness_sum + (np.sum(solution != 0) * 10)  # if a gene can be either activator or inhibitor, choose inhibitor
+        fitness_score = correctness_sum + (np.sum(np.array(solution) != 0) * 10)  # if a gene can be either activator or inhibitor, choose inhibitor
         
         # penalize unlikely activators 
         if len(bad_activator_index) > 0: 
             for temp_index in bad_activator_index: 
                 if solution[temp_index] == 1: 
-                    fitness_score = fitness_score - 40
+                    fitness_score = fitness_score - 50
         
         # penalize unlikely repressors
         if len(bad_repressors_index) > 0: 
             for temp_index in bad_repressors_index: 
                 if solution[temp_index] == -1: 
-                    fitness_score = fitness_score - 40
+                    fitness_score = fitness_score - 50
 
         # remove self inhibition since it would not work unless we go on to protein level 
         if self_reg_index > -1:
@@ -371,7 +371,7 @@ def GA_fit_data(training_dict, target_gene, corr_matrix, ideal_edges = 2, num_ge
 
         if np.sum(np.abs(solution)) > ideal_edges:
             penalty_terms = np.sum(np.abs(solution)) - ideal_edges
-            fitness_score = fitness_score - (penalty_terms * 15)
+            fitness_score = fitness_score - (penalty_terms * 50)
         
         for temp_index in list(range(0, len(corr_col))):
             if solution[temp_index] == 0:
