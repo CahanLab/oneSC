@@ -286,12 +286,15 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
         training_dict[temp_gene] = gene_train_dict.copy()
     return training_dict
 
-def GA_fit_data(training_dict, target_gene, num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True): 
+def GA_fit_data(training_dict, target_gene, corr_matrix, ideal_edges = 2, num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True): 
     unlikely_activators = training_dict[target_gene]['unlikely_activators']
     unlikely_repressors = training_dict[target_gene]['unlikely_repressors']
 
     training_data = training_dict[target_gene]['feature_matrix']
     training_targets = training_dict[target_gene]['gene_status_labels']
+
+    corr_matrix = corr_matrix.loc[training_data.index, :]
+    corr_col = corr_matrix.loc[:, target_gene]
 
     unlikely_activators = np.intersect1d(unlikely_activators, list(training_data.index))
     bad_activator_index = list()
@@ -332,6 +335,15 @@ def GA_fit_data(training_dict, target_gene, num_generations = 1000, max_iter = 1
     def max_features_fitness_func(ga_instance, solution, solution_idx):
         correctness_sum = 0
 
+        # various rewards and penalties 
+        additional_edge_reward = 10
+        prior_edge_penalty = 2 * additional_edge_reward
+
+        # various rewards and penalties 
+        correct_reward = 100000 * corr_matrix.shape[0]
+        edge_limit_rewards = 100 * corr_matrix.shape[0]
+        edge_limit_penalty = edge_limit_rewards / 2
+
         for i in range(0, len(training_data.columns)):
             state = training_data.columns[i]
             norm_dict = training_data.loc[:, state]
@@ -342,35 +354,59 @@ def GA_fit_data(training_dict, target_gene, num_generations = 1000, max_iter = 1
 
             total_prob = activation_prob * repression_prob
 
-            temp_score = int(total_prob == training_targets[i]) * 1000
+            temp_score = int(total_prob == training_targets[i]) * correct_reward
 
             correctness_sum = correctness_sum + temp_score
-        fitness_score = correctness_sum + (np.sum(np.array(solution) != 0) * 10)  # if a gene can be either activator or inhibitor, choose inhibitor
         
+        fitness_score = correctness_sum + (np.sum(np.array(solution) != 0) * additional_edge_reward)  # if a gene can be either activator or inhibitor, choose inhibitor
+        
+        # if the number of edges stay below ideal edge, then we add in the reward 
+        if np.sum(np.abs(solution)) > ideal_edges:
+            fitness_score = correctness_sum + edge_limit_penalty
+        else:
+            fitness_score = correctness_sum + edge_limit_rewards
+
         # penalize unlikely activators 
         if len(bad_activator_index) > 0: 
             for temp_index in bad_activator_index: 
                 if solution[temp_index] == 1: 
-                    fitness_score = fitness_score - 25
+                    fitness_score = fitness_score - prior_edge_penalty
         
         # penalize unlikely repressors
         if len(bad_repressors_index) > 0: 
             for temp_index in bad_repressors_index: 
                 if solution[temp_index] == -1: 
-                    fitness_score = fitness_score - 25
+                    fitness_score = fitness_score - prior_edge_penalty
 
         # remove self inhibition since it would not work unless we go on to protein level 
         if self_reg_index > -1:
             if solution[self_reg_index] == -1:
-                fitness_score = fitness_score - (3 * 1000)
+                fitness_score = fitness_score - (3 * correct_reward)
             elif solution[self_reg_index] == 1:
                 if reduce_auto_reg == False:
                     fitness_score = fitness_score  
                 else:
-                    fitness_score = fitness_score - 15 # remove unnecessary auto-activator.
+                    fitness_score = fitness_score - prior_edge_penalty # remove unnecessary auto-activator.
+       
+        # if the genetic algorithm direction and correlation is contradicting then -15 
+        # if the genetic algoirthm direction and correlation is the same, then 10 * correlation 
+        def check_direction_agreement(solution_pos, corr_pos):
+            if np.sign(corr_pos) == solution_pos: 
+                return True
+            else: 
+                return False
+        
+        for temp_index in list(range(0, len(corr_col))):
+            if solution[temp_index] == 0:
+                continue
+            else:
+                if check_direction_agreement(solution[temp_index], corr_col[temp_index]) == True:
+                    fitness_score = fitness_score + (np.abs(corr_col[temp_index]) * 10)
+                else: 
+                    fitness_score = fitness_score - (np.abs(corr_col[temp_index]) * 10)
 
         if np.sum(np.abs(solution)) == 0: # if there are no regulation on the target gene, not even self regulation, then it's not acceptable
-            fitness_score = fitness_score - (3 * 1000)
+            fitness_score = fitness_score - (3 * correct_reward)
         return fitness_score
 
 
@@ -384,7 +420,7 @@ def GA_fit_data(training_dict, target_gene, num_generations = 1000, max_iter = 1
     mutation_type = "random"
     mutation_percent_genes = 10
 
-    perfect_fitness = training_data.shape[1] * 1000
+    perfect_fitness = training_data.shape[1] * 100000 * corr_matrix.shape[0]
 
     # generate an initial population pool 
     init_pop_pool = np.random.choice([0, -1, 1], size=(sol_per_pop, num_genes))
@@ -438,11 +474,13 @@ def GA_fit_data(training_dict, target_gene, num_generations = 1000, max_iter = 1
         
     return [new_edges_df, perfect_fitness_bool]
 
-def create_network(training_dict, num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True): 
+def create_network(training_dict, corr_matrix, ideal_edges = 2, num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True): 
     total_network = pd.DataFrame()
     for temp_gene in training_dict.keys():
         new_network, perfect_fitness_bool = GA_fit_data(training_dict, 
                                                         temp_gene, 
+                                                        corr_matrix = corr_matrix,
+                                                        ideal_edges = ideal_edges,
                                                         num_generations = num_generations, 
                                                         max_iter = max_iter, 
                                                         num_parents_mating = num_parents_mating, 
