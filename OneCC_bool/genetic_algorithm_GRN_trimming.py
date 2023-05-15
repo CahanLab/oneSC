@@ -286,15 +286,12 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
         training_dict[temp_gene] = gene_train_dict.copy()
     return training_dict
 
-def GA_fit_data(training_dict, target_gene, corr_matrix, ideal_edges = 2, num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True): 
+def GA_fit_data(training_dict, target_gene, num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True): 
     unlikely_activators = training_dict[target_gene]['unlikely_activators']
     unlikely_repressors = training_dict[target_gene]['unlikely_repressors']
 
     training_data = training_dict[target_gene]['feature_matrix']
     training_targets = training_dict[target_gene]['gene_status_labels']
-
-    corr_matrix = corr_matrix.loc[training_data.index, :]
-    corr_col = corr_matrix.loc[:, target_gene]
 
     unlikely_activators = np.intersect1d(unlikely_activators, list(training_data.index))
     bad_activator_index = list()
@@ -354,13 +351,13 @@ def GA_fit_data(training_dict, target_gene, corr_matrix, ideal_edges = 2, num_ge
         if len(bad_activator_index) > 0: 
             for temp_index in bad_activator_index: 
                 if solution[temp_index] == 1: 
-                    fitness_score = fitness_score - 50
+                    fitness_score = fitness_score - 25
         
         # penalize unlikely repressors
         if len(bad_repressors_index) > 0: 
             for temp_index in bad_repressors_index: 
                 if solution[temp_index] == -1: 
-                    fitness_score = fitness_score - 50
+                    fitness_score = fitness_score - 25
 
         # remove self inhibition since it would not work unless we go on to protein level 
         if self_reg_index > -1:
@@ -371,27 +368,6 @@ def GA_fit_data(training_dict, target_gene, corr_matrix, ideal_edges = 2, num_ge
                     fitness_score = fitness_score  
                 else:
                     fitness_score = fitness_score - 15 # remove unnecessary auto-activator.
-       
-        # if the genetic algorithm direction and correlation is contradicting then -15 
-        # if the genetic algoirthm direction and correlation is the same, then 10 * correlation 
-        def check_direction_agreement(solution_pos, corr_pos):
-            if np.sign(corr_pos) == solution_pos: 
-                return True
-            else: 
-                return False
-
-        if np.sum(np.abs(solution)) > ideal_edges:
-            penalty_terms = np.sum(np.abs(solution)) - ideal_edges
-            fitness_score = fitness_score - (penalty_terms * 50)
-        
-        for temp_index in list(range(0, len(corr_col))):
-            if solution[temp_index] == 0:
-                continue
-            else:
-                if check_direction_agreement(solution[temp_index], corr_col[temp_index]) == True:
-                    fitness_score = fitness_score + (np.abs(corr_col[temp_index]) * 10)
-                else: 
-                    fitness_score = fitness_score - 15
 
         if np.sum(np.abs(solution)) == 0: # if there are no regulation on the target gene, not even self regulation, then it's not acceptable
             fitness_score = fitness_score - (3 * 1000)
@@ -462,13 +438,11 @@ def GA_fit_data(training_dict, target_gene, corr_matrix, ideal_edges = 2, num_ge
         
     return [new_edges_df, perfect_fitness_bool]
 
-def create_network(training_dict, corr_matrix, ideal_edges = 2, num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True): 
+def create_network(training_dict, num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True): 
     total_network = pd.DataFrame()
     for temp_gene in training_dict.keys():
         new_network, perfect_fitness_bool = GA_fit_data(training_dict, 
                                                         temp_gene, 
-                                                        corr_matrix = corr_matrix,
-                                                        ideal_edges = ideal_edges,
                                                         num_generations = num_generations, 
                                                         max_iter = max_iter, 
                                                         num_parents_mating = num_parents_mating, 
