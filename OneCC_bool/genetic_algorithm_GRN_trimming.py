@@ -170,17 +170,16 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
         for temp_lineage in state_dict.keys():
             temp_state = state_dict[temp_lineage]
             all_genes = np.array(temp_state.index)
-            earliest_column = np.where(temp_state.loc[gene_interest, :] == 1)[0]
-            if len(earliest_column) == 0:
+            pos_columns_index = np.where(temp_state.loc[gene_interest, :] == 1)[0]
+            if len(pos_columns_index) == 0:
                 continue
-            else:
-                earliest_column = earliest_column[0]
-            
-            temp_good_genes = np.array(list(temp_state.index[temp_state.iloc[:, earliest_column] == 1]))
-            if init_status == True:
-                good_genes = np.array(temp_good_genes)
-            else:
-                good_genes = np.intersect1d([good_genes, temp_good_genes])
+            for temp_index in pos_columns_index:
+                temp_good_genes = np.array(list(temp_state.index[temp_state.iloc[:, temp_index] == 1]))
+                if init_status == True:
+                    good_genes = np.array(temp_good_genes)
+                    init_status = False
+                else:
+                    good_genes = np.intersect1d(good_genes, temp_good_genes)
         bad_genes = np.setdiff1d(all_genes, good_genes)
         return bad_genes
 
