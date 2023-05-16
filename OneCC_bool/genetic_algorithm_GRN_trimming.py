@@ -113,6 +113,7 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
     def extract_unstable_state(state_df, transition_df, time_change_df, target_gene, exclude_index_list, samp_tab, cluster_id, pt_id, lineage_name, act_tolerance = 0.01):
         target_gene_state = []
         extract_unstable_df = pd.DataFrame()
+        more_unlikely_activators = []
 
         def find_potential_regulators(transition_df, time_change_df, target_gene, exclude_index, cluster_id, pt_id, act_tolerance):
             changing_genes = transition_df.index[transition_df.iloc[:, exclude_index + 1] != 0]
@@ -146,13 +147,20 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
             return potential_regulators
         
         if len(exclude_index_list) == 0:
-            return [[], pd.DataFrame(), []]
+            return [[], pd.DataFrame(), [], []]
         for temp_index in exclude_index_list: 
             target_gene_state.append(state_df.iloc[:, temp_index + 1][target_gene])
             temp_extract_unstable_df = state_df.iloc[:, temp_index:temp_index + 1].copy()
             potential_regulators = find_potential_regulators(transition_df, time_change_df, target_gene, temp_index, cluster_id, pt_id, act_tolerance)
             for potential_regulator in potential_regulators:
                 temp_extract_unstable_df.loc[potential_regulator, temp_extract_unstable_df.columns[0]] = state_df.loc[potential_regulator, state_df.columns[temp_index + 1]]
+            
+            # get the unlikely activators 
+            if state_df.iloc[:, temp_index + 1][target_gene] == 1: 
+                for temp_regulator in state_df[state_df.columns[temp_index + 1]].index:
+                    if temp_regulator in potential_regulators:
+                        if state_df.loc[temp_regulator, state_df.columns[temp_index + 1]] == 1:
+                            more_unlikely_activators.append(temp_regulator)
 
             extract_unstable_df = pd.concat([extract_unstable_df, temp_extract_unstable_df], axis = 1)
         
@@ -162,7 +170,7 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
         else: 
             unstable_states = []
         extract_unstable_df.columns = extract_unstable_df.columns + "_unstable_" + lineage_name 
-        return [target_gene_state, extract_unstable_df, unstable_states]
+        return [target_gene_state, extract_unstable_df, unstable_states, more_unlikely_activators]
 
     def find_unlikely_activators(state_dict, gene_interest):
         good_genes = np.array([])
@@ -173,13 +181,20 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
             pos_columns_index = np.where(temp_state.loc[gene_interest, :] == 1)[0]
             if len(pos_columns_index) == 0:
                 continue
-            for temp_index in pos_columns_index:
-                temp_good_genes = np.array(list(temp_state.index[temp_state.iloc[:, temp_index] == 1]))
-                if init_status == True:
-                    good_genes = np.array(temp_good_genes)
-                    init_status = False
-                else:
-                    good_genes = np.intersect1d(good_genes, temp_good_genes)
+            else: 
+                temp_index = pos_columns_index[0]
+            
+            temp_good_genes = np.array(list(temp_state.index[temp_state.iloc[:, temp_index] == 1]))
+           
+            if temp_index == 0: # if the first occruance is at the inital, then it should be activated by itself or something outside of the network
+                return all_genes
+
+            if init_status == True:
+                good_genes = np.array(temp_good_genes)
+                init_status = False
+            else:
+                good_genes = np.intersect1d(good_genes, temp_good_genes)
+
         bad_genes = np.setdiff1d(all_genes, good_genes)
         return bad_genes
 
@@ -259,9 +274,10 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
             prev_index_list = prev_index_list[prev_index_list > -1]
             prev_index_list = [int(x) for x in prev_index_list]
             # get the unstable states
-            [temp_label, temp_feature, unstable_states] = extract_unstable_state(temp_state, temp_transition, temp_time_change, temp_gene, prev_index_list, samp_tab, cluster_id, pt_id, temp_lineage, act_tolerance)
+            [temp_label, temp_feature, unstable_states, more_unlikely_activators] = extract_unstable_state(temp_state, temp_transition, temp_time_change, temp_gene, prev_index_list, samp_tab, cluster_id, pt_id, temp_lineage, act_tolerance)
             gene_status_label = gene_status_label + temp_label
             feature_mat = pd.concat([feature_mat, temp_feature], axis = 1).copy()
+            unlikely_activators = np.concatenate((unlikely_activators, more_unlikely_activators))
             
             # get stable states. aka genes in states that do not change immediately 
             # TODO add an argument of all the unstable states so we can avoid them even if they are in a different lineage  
