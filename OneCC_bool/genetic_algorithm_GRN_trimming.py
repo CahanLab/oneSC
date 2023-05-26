@@ -290,13 +290,14 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
         training_dict[temp_gene] = gene_train_dict.copy()
     return training_dict
 
-def GA_fit_data(training_dict, target_gene, corr_matrix, ideal_edges = 2, num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True):
+def GA_fit_data(training_dict, target_gene, corr_matrix, weight_dict = dict(), ideal_edges = 2, num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True):
     unlikely_activators = training_dict[target_gene]['unlikely_activators']
     unlikely_repressors = training_dict[target_gene]['unlikely_repressors']
 
     training_data = training_dict[target_gene]['feature_matrix']
     training_targets = training_dict[target_gene]['gene_status_labels']
 
+    #ensure the correlation have the same order as compiled training data 
     corr_matrix = corr_matrix.loc[training_data.index, :]
     corr_col = corr_matrix.loc[:, target_gene]
 
@@ -340,12 +341,12 @@ def GA_fit_data(training_dict, target_gene, corr_matrix, ideal_edges = 2, num_ge
         correctness_sum = 0
 
         # various rewards and penalties 
-        additional_edge_reward = 10
+        additional_edge_reward = 100
         prior_edge_penalty = 2 * additional_edge_reward
 
         # various rewards and penalties 
-        correct_reward = 100000 * corr_matrix.shape[0]
-        edge_limit_rewards = 100 * corr_matrix.shape[0]
+        correct_reward = 1000000 * corr_matrix.shape[0]
+        edge_limit_rewards = 1000 * corr_matrix.shape[0]
         edge_limit_penalty = edge_limit_rewards / 2
 
         for i in range(0, len(training_data.columns)):
@@ -408,6 +409,13 @@ def GA_fit_data(training_dict, target_gene, corr_matrix, ideal_edges = 2, num_ge
                     fitness_score = fitness_score + (np.abs(corr_col[temp_index]) * 10)
                 else: 
                     fitness_score = fitness_score - (np.abs(corr_col[temp_index]) * 10)
+        
+        if len(weight_dict) > 0:
+            for temp_index in list(range(0, len(solution))):
+                if solution[temp_index] == 0:
+                    continue
+                else:
+                    fitness_score = fitness_score + weight_dict[training_data.index[temp_index]]
 
         if np.sum(np.abs(solution)) == 0: # if there are no regulation on the target gene, not even self regulation, then it's not acceptable
             fitness_score = fitness_score - (3 * correct_reward)
@@ -478,12 +486,13 @@ def GA_fit_data(training_dict, target_gene, corr_matrix, ideal_edges = 2, num_ge
         
     return [new_edges_df, perfect_fitness_bool]
 
-def create_network(training_dict, corr_matrix, ideal_edges = 2, num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True): 
+def create_network(training_dict, corr_matrix, weight_dict = dict(), ideal_edges = 2, num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True): 
     total_network = pd.DataFrame()
     for temp_gene in training_dict.keys():
         new_network, perfect_fitness_bool = GA_fit_data(training_dict, 
                                                         temp_gene, 
                                                         corr_matrix = corr_matrix,
+                                                        weight_dict = weight_dict,
                                                         ideal_edges = ideal_edges,
                                                         num_generations = num_generations, 
                                                         max_iter = max_iter, 
@@ -936,3 +945,22 @@ def create_network_penalize(training_dict, selected_regulators_dict = dict(), re
         if perfect_fitness_bool == False: 
             print(temp_gene + " does not fit perfectly")
     return total_network
+
+def define_weight(state_dict):
+    weight_dict = dict()
+    max_len = 0
+    for traj in state_dict.keys():
+        temp_state = state_dict[traj]
+        if temp_state.shape[1] > max_len:
+            max_len = temp_state.shape[1]
+        for temp_col_index in range(0, temp_state.shape[1]):
+            active_genes_list = temp_state.index[temp_state.iloc[:, temp_col_index] == 1]
+            for active_gene in active_genes_list:
+                if active_gene in weight_dict.keys():
+                    if temp_col_index < weight_dict[active_gene]:
+                        weight_dict[active_gene] = temp_col_index
+                else:
+                    weight_dict[active_gene] = temp_col_index
+    for temp_gene in weight_dict.keys():
+        weight_dict[temp_gene] = max_len - weight_dict[temp_gene]
+    return weight_dict
