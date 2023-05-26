@@ -2,27 +2,16 @@ import numpy as np
 import pandas as pd
 import pygad
 
-def define_states(exp_tab, samp_tab, lineage_cluster, vector_thresh, cluster_col = 'cluster_id'):
-    """Define booleanized and discrete cell state profiles 
-
-    Args:
-        exp_tab (pandas.DataFrame): scRNA-seq expression matrix. Rownames are genes; column names are sample barcodes. 
-        samp_tab (pandas.DataFrame): sample Ta
-        lineage_cluster (_type_): _description_
-        vector_thresh (_type_): _description_
-        cluster_col (str, optional): _description_. Defaults to 'cluster_id'.
-
-    Returns:
-        _type_: _description_
-    """
+def define_states(exp_tab, samp_tab, lineage_cluster, vector_thresh, cluster_col = 'cluster_id', percent_exp = 0.2):
+    def check_zero(vector):
+        return (len(vector) - np.sum(vector == 0)) / len(vector)
     state_dict = dict()
     for lineage in lineage_cluster.keys():
-        
         temp_df = pd.DataFrame()
         for cell_type in lineage_cluster[lineage]:
             sub_st = samp_tab.loc[samp_tab[cluster_col] == cell_type, :]
             sub_exp = exp_tab.loc[:, sub_st.index]
-            temp_df[cell_type] = (sub_exp.mean(axis = 1) >= vector_thresh) * 1
+            temp_df[cell_type] = np.logical_and((sub_exp.mean(axis = 1) >= vector_thresh), (sub_exp.apply(check_zero, axis = 1) >= percent_exp)) * 1
         state_dict[lineage] = temp_df
     return state_dict  
 

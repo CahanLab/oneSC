@@ -98,14 +98,14 @@ def bin_smooth(time_series, pseudoTime_bin, smooth_style = "mean", spline_ME = 0
 
 # this function is to find the threshold of the genes based on the data observation 
 # this could obviously be a little bit better 
-def find_threshold_vector(exp_df, samp_st, cluster_col = "cluster"): 
+def find_threshold_vector(exp_df, samp_st, cluster_col = "cluster", cutoff_percentage = 0.4): 
 
     cluster_exp = pd.DataFrame()
     for temp_cluster in np.unique(samp_st[cluster_col]):
         temp_st = samp_st.loc[samp_st[cluster_col] == temp_cluster, :]
         temp_exp = exp_df.loc[:, temp_st.index]
-        cluster_exp[temp_cluster] = temp_exp.mean (axis = 1)
-    return ((cluster_exp.max(axis = 1) - cluster_exp.min(axis = 1)) / 2 + cluster_exp.min(axis = 1))
+        cluster_exp[temp_cluster] = temp_exp.mean(axis = 1)
+    return ((cluster_exp.max(axis = 1) - cluster_exp.min(axis = 1)) * cutoff_percentage + cluster_exp.min(axis = 1))
 
 def construct_cluster_network(train_exp, sampTab, initial_clusters, terminal_clusters, cluster_col = "cluster_id", pseudo_col = "pseudotime"):
     pt_list = list()
