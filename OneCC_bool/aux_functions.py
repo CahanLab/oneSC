@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 from statsmodels.sandbox.stats.multicomp import multipletests
 from pygam import GAM, s,l
+from scipy.stats import rankdata
 import scanpy as sc
 import multiprocessing as mp
 import os
@@ -169,10 +170,8 @@ def suggest_dynamic_genes(exp_tab, samp_tab, trajectory_dict, cluster_col, pt_co
 
     fold_change = np.array(average_df['max_exp'] / average_df['min_exp']).astype(float)
     average_df.loc[:, 'log2_change'] = np.log2(fold_change)
-    average_df = average_df.loc[average_df['log2_change'] >= log2_change_cutoff, :].copy()
-    average_df = average_df.loc[average_df['max_exp'] >= min_exp_cutoff, :].copy()
 
-    return_dict = dict()
+    output_df = pd.DataFrame()
     for traj_name in trajectory_dict.keys():
         sub_samp_tab = samp_tab.loc[samp_tab[cluster_col].isin(trajectory_dict[traj_name]), :].copy()
         sub_exp_tab = exp_tab.loc[:, exp_tab.columns.isin(sub_samp_tab.index)].copy()
@@ -194,16 +193,27 @@ def suggest_dynamic_genes(exp_tab, samp_tab, trajectory_dict, cluster_col, pt_co
         print("starting gamma...")
         gpChr = pd.DataFrame(gamFit(sub_exp_tab.loc[average_df.index, t1C.index],average_df.index,t1))
         gpChr.columns = ["dynamic_pval"]
-        gpChr['adj_pval'] = multipletests(gpChr['dynamic_pval'])[1]
-        gpChr = gpChr.loc[gpChr['adj_pval'] < adj_p_cutoff, :].copy()
-
-        sub_average_df = average_df.loc[gpChr.index, :].copy()
+        gpChr['traj_name'] = traj_name
         
-        output_df = pd.concat([sub_average_df, gpChr], axis=1)
+        output_df = pd.concat([output_df, gpChr], axis=0)
+    
+    new_output = pd.DataFrame()
+    for temp_gene in np.unique(output_df.index):
+        temp_output_df = output_df.loc[temp_gene, :]
+        temp_new_output = pd.DataFrame([[temp_gene, np.min(temp_output_df['dynamic_pval'])]])
+        new_output = pd.concat([new_output, temp_new_output], axis = 0)
+    new_output.columns = ['gene', 'dynamic_pval']
+    new_output.index = new_output['gene']
+    new_output = new_output.dropna()
+    new_output['rank'] = rankdata(new_output['dynamic_pval'])
+    
+    average_df = average_df.loc[average_df['log2_change'] >= log2_change_cutoff, :].copy()
+    average_df = average_df.loc[average_df['max_exp'] >= min_exp_cutoff, :].copy()
+    new_output = new_output.loc[new_output['gene'].isin(average_df.index), :]
+    average_df = average_df.loc[new_output.index, :]
 
-        return_dict[traj_name] = output_df.copy()
-
-    return return_dict
+    new_output = pd.concat([new_output, average_df], axis = 1)
+    return new_output
 
 def suggest_dynamic_TFs(exp_tab, samp_tab, tf_list, cluster_col, n_top_genes = 2000, adj_p_cutoff = 0.05, logfold_cutoff = 2, pct_exp_cutoff = 0.1):
     temp_adata = sc.AnnData(exp_tab.T)
