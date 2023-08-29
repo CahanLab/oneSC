@@ -9,7 +9,7 @@ class network_structure(object):
         self.subnet_name = subnet_name
         self.network_dict = dict()
         
-    def train_dummy_grn(self, grn_tab, max_val = 2, min_val = 0.02, m = 7):
+    def train_grn(self, grn_tab, max_val = 2, min_val = 0.02, m = 7):
         network_dict = dict()
    
         all_genes = np.concatenate((np.unique(grn_tab['TF']), np.unique(grn_tab['TG'])))
@@ -49,7 +49,7 @@ class network_structure(object):
             network_dict[temp_gene] = gene_obj
         self.network_dict = network_dict
 
-    def train_grn(self, grn_tab, exp_tab, samp_tab, cluster_col = "cell_type"):
+  
         network_dict = dict()
    
         all_genes = np.concatenate((np.unique(grn_tab['TF']), np.unique(grn_tab['TG'])))
