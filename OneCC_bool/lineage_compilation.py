@@ -109,21 +109,17 @@ def find_threshold_vector(exp_df, samp_st, cluster_col = "cluster", cutoff_perce
 def construct_cluster_network(train_exp, sampTab, initial_clusters, terminal_clusters, cluster_col = "cluster_id", pseudo_col = "pseudotime"):
     pt_list = list()
     cluster_list = list()
-    
     mean_exp = pd.DataFrame()
     for temp_cluster in np.unique(sampTab[cluster_col]):
-
         temp_sampTab = sampTab.loc[sampTab[cluster_col] == temp_cluster, :]
         temp_train_exp = train_exp.loc[:, temp_sampTab.index]
         mean_exp[temp_cluster] = temp_train_exp.mean(axis = 1)
-        
         cluster_list.append(temp_cluster)
         pt_list.append(temp_sampTab[pseudo_col].mean())
 
     mean_pt = pd.DataFrame()
     mean_pt['cluster'] = cluster_list 
     mean_pt['pt'] = pt_list
-
     mean_pt = mean_pt.sort_values("pt")
     mean_exp = mean_exp.loc[:, mean_pt['cluster']]
 
@@ -133,19 +129,25 @@ def construct_cluster_network(train_exp, sampTab, initial_clusters, terminal_clu
         for j in range(i + 1, mean_exp.shape[1]):
             temp_dict = {"starting": mean_exp.columns[i], "ending": mean_exp.columns[j], "distance": np.linalg.norm(mean_exp.iloc[:, j] - mean_exp.iloc[:, i])}
             distance_df = pd.concat([distance_df, pd.DataFrame([temp_dict])], ignore_index = True)
+    distance_df['norm_dist'] = (distance_df['distance'] - np.min(distance_df['distance'])) / (np.max(distance_df['distance']) - np.min(distance_df['distance']))
+    distance_df['starting_pt'] = None
+    mean_pt.index = mean_pt['cluster']
+    for cluster in np.unique(distance_df['starting']):
+        distance_df.loc[distance_df['starting'] == cluster, 'starting_pt'] = mean_pt.loc[cluster, 'pt']
+    distance_df['combined_score'] = distance_df['norm_dist'] + (distance_df['starting_pt'] / 2)
 
+    # add in the weight of the time component. The earlier the better 
     my_G = nx.DiGraph()
-    
     for cluster_name in mean_exp.columns:
         my_G.add_node(cluster_name)
-
         # if the cluster name is the inital 
         if cluster_name not in initial_clusters:
             # no need to check incoming 
             incoming_nodes = [x[0] for x in my_G.in_edges(cluster_name)]
             if len(incoming_nodes) == 0: 
                 temp_dist = distance_df.loc[distance_df['ending'] == cluster_name, :]
-                temp_dist = temp_dist.sort_values("distance")
+                temp_dist = temp_dist.loc[temp_dist['starting'].isin(terminal_clusters) == False, :].copy()
+                temp_dist = temp_dist.sort_values("combined_score")
                 temp_dist.index = list(range(0, temp_dist.shape[0]))
                 my_G.add_edges_from([(temp_dist.loc[0, 'starting'], cluster_name)])
                 
@@ -153,7 +155,7 @@ def construct_cluster_network(train_exp, sampTab, initial_clusters, terminal_clu
             out_nodes = [x[1] for x in my_G.out_edges(cluster_name)]
             if len(out_nodes) == 0: 
                 temp_dist = distance_df.loc[distance_df['starting'] == cluster_name, :]
-                temp_dist = temp_dist.sort_values("distance")
+                temp_dist = temp_dist.sort_values("combined_score")
                 temp_dist.index = list(range(0, temp_dist.shape[0]))
                 my_G.add_edges_from([(cluster_name, temp_dist.loc[0, 'ending'])])
 
