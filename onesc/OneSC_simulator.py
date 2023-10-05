@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd 
 from .gene import *
 
-class OneCC_bool_simulator(object): 
+class OneSC_simulator(object): 
     def __init__(self): 
         self.networks_compilation = dict()
         self.sim_exp = None

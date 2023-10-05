@@ -5,3 +5,7 @@ OneCC_bool.egg-info
 OneCC_bool/__pycache__
 .DS_store
 OneCC_bool/.ipynb_checkpoints
+
+onesc.egg-info
+onesc/.ipynb_checkpoints
+onesc/__pycache__

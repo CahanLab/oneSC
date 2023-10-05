@@ -3,15 +3,16 @@ import pandas as pd
 import itertools
 import networkx as nx 
 
-def make_lineage_time_change(train_exp, train_st, trajectory_cells_dict, cluster_col, pt_col, bool_thresholds, pseudoTime_bin, smooth_style = 'mean'):
-    lineage_time_change_dict = dict()
-    for temp_lineage in trajectory_cells_dict.keys(): 
-        activation_time = find_genes_time_change(train_st, train_exp, trajectory_cells_dict, cluster_col, pt_col, bool_thresholds, pseudoTime_bin, temp_lineage)
-        lineage_time_change_dict[temp_lineage] = activation_time
-    return lineage_time_change_dict
 
-def find_genes_time_change(train_st, train_exp, lineage_cluster_dict, cluster_col, pt_col, vector_thresh, pseudoTime_bin, lineage_name, smooth_style = 'mean'):
-    target_clusters = lineage_cluster_dict[lineage_name]
+def find_gene_change_trajectory(train_exp, train_st, trajectory_cells_dict, cluster_col, pt_col, bool_thresholds, pseudoTime_bin, smooth_style = 'mean'):
+    trajectory_time_change_dict = dict()
+    for temp_trajectory in trajectory_cells_dict.keys(): 
+        activation_time = find_genes_time_change(train_st, train_exp, trajectory_cells_dict, cluster_col, pt_col, bool_thresholds, pseudoTime_bin, temp_trajectory)
+        trajectory_time_change_dict[temp_trajectory] = activation_time
+    return trajectory_time_change_dict
+
+def find_genes_time_change(train_st, train_exp, trajectory_cluster_dict, cluster_col, pt_col, vector_thresh, pseudoTime_bin, trajectory_name, smooth_style = 'mean'):
+    target_clusters = trajectory_cluster_dict[trajectory_name]
     sub_train_st = train_st.loc[train_st[cluster_col].isin(target_clusters), :]
     sub_train_st = sub_train_st.sort_values(pt_col)
     sub_train_exp = train_exp.loc[:, sub_train_st.index]
@@ -161,17 +162,15 @@ def construct_cluster_network(train_exp, sampTab, initial_clusters, terminal_clu
 
     return my_G 
 
-def extract_lineage(clusters_G, initial_clusters, terminal_clusters): 
-    clusters_lineage_dict = dict()
+def extract_trajectory(clusters_G, initial_clusters, terminal_clusters): 
+    clusters_trajectory_dict = dict()
     i = 0 
 
     start_end_combos = itertools.product(initial_clusters, terminal_clusters)
-
     for unique_combo in start_end_combos:
         for item in nx.all_simple_paths(clusters_G, unique_combo[0], unique_combo[1]): 
-            clusters_lineage_dict["lineage_" + str(i)] = item
+            clusters_trajectory_dict["trajectory_" + str(i)] = item
             i = i + 1
-    
-    return clusters_lineage_dict
+    return clusters_trajectory_dict
 
 

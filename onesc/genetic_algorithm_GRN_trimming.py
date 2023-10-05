@@ -36,7 +36,7 @@ def define_transition(state_dict):
     return transition_dict
 
 def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, samp_tab, cluster_id = "leiden", pt_id = "dpt_pseudotime",act_tolerance = 0.01, selected_regulators = list()):
-    all_genes = transition_dict['lineage_0'].index
+    all_genes = transition_dict['trajectory_0'].index
 
     def extract_steady_states(state_df, target_gene, lineage_name):
         extract_ss_df = state_df.iloc[:, -1:].copy()
@@ -91,7 +91,7 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
 
     def extract_stable_initial_state(state_dict, target_gene, initial_stability = True):
         if initial_stability == True:
-            temp_state = state_dict['lineage_0']
+            temp_state = state_dict['trajectory_0']
             extract_ss_initial_df = temp_state.iloc[:, 0:1].copy()
             extract_ss_initial_df.columns = extract_ss_initial_df.columns + "_initial_SS_all"
             target_gene_state = [extract_ss_initial_df.loc[target_gene, extract_ss_initial_df.columns[0]]]
