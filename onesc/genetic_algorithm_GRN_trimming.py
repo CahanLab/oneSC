@@ -2,45 +2,45 @@ import numpy as np
 import pandas as pd
 import pygad
 
-def define_states(exp_tab, samp_tab, lineage_cluster, vector_thresh, cluster_col = 'cluster_id', percent_exp = 0.2):
+def define_states(exp_tab, samp_tab, trajectory_cluster, vector_thresh, cluster_col = 'cluster_id', percent_exp = 0.2):
     def check_zero(vector):
         return (len(vector) - np.sum(vector == 0)) / len(vector)
     state_dict = dict()
-    for lineage in lineage_cluster.keys():
+    for trajectory in trajectory_cluster.keys():
         temp_df = pd.DataFrame()
-        for cell_type in lineage_cluster[lineage]:
+        for cell_type in trajectory_cluster[trajectory]:
             sub_st = samp_tab.loc[samp_tab[cluster_col] == cell_type, :]
             sub_exp = exp_tab.loc[:, sub_st.index]
             temp_df[cell_type] = np.logical_and((sub_exp.mean(axis = 1) >= vector_thresh), (sub_exp.apply(check_zero, axis = 1) >= percent_exp)) * 1
-        state_dict[lineage] = temp_df
+        state_dict[trajectory] = temp_df
     return state_dict  
 
 def define_transition(state_dict):
     transition_dict = dict()
-    for lineage in state_dict.keys():
+    for trajectory in state_dict.keys():
         temp_df = pd.DataFrame()
         initial_condition = True
         prev_col = None 
-        for cell_type in state_dict[lineage].columns:
+        for cell_type in state_dict[trajectory].columns:
             if initial_condition == True: 
-                temp_trans = state_dict[lineage][cell_type]
+                temp_trans = state_dict[trajectory][cell_type]
                 temp_df[cell_type] = temp_trans.replace(0, -1)
                 prev_col = cell_type
                 initial_condition = False
             else: 
-                temp_trans = state_dict[lineage][cell_type] - state_dict[lineage][prev_col]
+                temp_trans = state_dict[trajectory][cell_type] - state_dict[trajectory][prev_col]
                 temp_df[cell_type] = temp_trans
                 prev_col = cell_type
                 
-        transition_dict[lineage] = temp_df
+        transition_dict[trajectory] = temp_df
     return transition_dict
 
-def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, samp_tab, cluster_id = "leiden", pt_id = "dpt_pseudotime",act_tolerance = 0.01, selected_regulators = list()):
+def curate_training_data(state_dict, transition_dict, trajectory_time_change_dict, samp_tab, cluster_id = "leiden", pt_id = "dpt_pseudotime",act_tolerance = 0.01, selected_regulators = list()):
     all_genes = transition_dict['trajectory_0'].index
 
-    def extract_steady_states(state_df, target_gene, lineage_name):
+    def extract_steady_states(state_df, target_gene, trajectory_name):
         extract_ss_df = state_df.iloc[:, -1:].copy()
-        extract_ss_df.columns = extract_ss_df.columns + "_SS_" + lineage_name
+        extract_ss_df.columns = extract_ss_df.columns + "_SS_" + trajectory_name
         target_gene_state = [extract_ss_df.loc[target_gene, extract_ss_df.columns[0]]]
         prior_df = state_df.iloc[:, -2]
         if prior_df[target_gene] == 1:
@@ -49,7 +49,7 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
             extract_ss_df.loc[target_gene, extract_ss_df.columns[0]] = 0
         return [target_gene_state, extract_ss_df]
 
-    def extract_stable_state(state_df, target_gene, unstable_states_list, lineage_name):
+    def extract_stable_state(state_df, target_gene, unstable_states_list, trajectory_name):
         if len(unstable_states_list) == 0:
             #extract_stable_df = state_df.drop(state_df.columns[np.array([0, state_df.shape[1] - 1])], axis = 1).copy()
             extract_stable_df = state_df.drop(state_df.columns[int(state_df.shape[1] - 1)], axis = 1).copy()
@@ -79,12 +79,12 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
                     extract_stable_df.loc[target_gene, state] = 1
                 else:
                     extract_stable_df.loc[target_gene, state] = 0
-        extract_stable_df.columns = extract_stable_df.columns + "_stable_" + lineage_name
+        extract_stable_df.columns = extract_stable_df.columns + "_stable_" + trajectory_name
         return [target_gene_state, extract_stable_df]
 
     def check_stable_initial(trans_dict, target_gene):
-        for temp_lineage in trans_dict.keys():
-            temp_transition = trans_dict[temp_lineage]
+        for temp_trajectory in trans_dict.keys():
+            temp_transition = trans_dict[temp_trajectory]
             if 0 in np.where(temp_transition.loc[target_gene, :] != 0)[0] - 1:
                 return False
         return True
@@ -99,7 +99,7 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
         else:
             return [[], pd.DataFrame()]
 
-    def extract_unstable_state(state_df, transition_df, time_change_df, target_gene, exclude_index_list, samp_tab, cluster_id, pt_id, lineage_name, act_tolerance = 0.01):
+    def extract_unstable_state(state_df, transition_df, time_change_df, target_gene, exclude_index_list, samp_tab, cluster_id, pt_id, trajectory_name, act_tolerance = 0.01):
         target_gene_state = []
         extract_unstable_df = pd.DataFrame()
         more_unlikely_activators = []
@@ -158,14 +158,14 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
             unstable_states = list(extract_unstable_df.columns)
         else: 
             unstable_states = []
-        extract_unstable_df.columns = extract_unstable_df.columns + "_unstable_" + lineage_name 
+        extract_unstable_df.columns = extract_unstable_df.columns + "_unstable_" + trajectory_name 
         return [target_gene_state, extract_unstable_df, unstable_states, more_unlikely_activators]
 
     def find_unlikely_activators(state_dict, gene_interest):
         good_genes = np.array([])
         init_status = True
-        for temp_lineage in state_dict.keys():
-            temp_state = state_dict[temp_lineage]
+        for temp_trajectory in state_dict.keys():
+            temp_state = state_dict[temp_trajectory]
             all_genes = np.array(temp_state.index)
             pos_columns_index = np.where(temp_state.loc[gene_interest, :] == 1)[0]
             if len(pos_columns_index) == 0:
@@ -208,7 +208,7 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
         return remove_index
 
     def remove_conflicts(feature_mat, gene_status):
-        filter_df  = pd.DataFrame(data = None, index = feature_mat.columns, columns = ['ct', 'style', 'lineage', 'type'])   
+        filter_df  = pd.DataFrame(data = None, index = feature_mat.columns, columns = ['ct', 'style', 'trajectory', 'type'])   
         for temp_state in filter_df.index:
             filter_df.loc[temp_state, :] = temp_state.split("_")
         filter_df['col_index'] = list(range(0, feature_mat.shape[1]))
@@ -252,10 +252,10 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
         gene_status_label = gene_status_label + temp_label
         feature_mat = pd.concat([feature_mat, temp_feature], axis = 1).copy()
         '''
-        for temp_lineage in transition_dict.keys():
-            temp_transition = transition_dict[temp_lineage] # transition matrix 
-            temp_state = state_dict[temp_lineage] # state matrix 
-            temp_time_change = lineage_time_change_dict[temp_lineage] # time series 
+        for temp_trajectory in transition_dict.keys():
+            temp_transition = transition_dict[temp_trajectory] # transition matrix 
+            temp_state = state_dict[temp_trajectory] # state matrix 
+            temp_time_change = trajectory_time_change_dict[temp_trajectory] # time series 
             
             # find the index of the state before transition of temp_gene 
             # the states that were right before a transition is not stable 
@@ -263,19 +263,19 @@ def curate_training_data(state_dict, transition_dict, lineage_time_change_dict, 
             prev_index_list = prev_index_list[prev_index_list > -1]
             prev_index_list = [int(x) for x in prev_index_list]
             # get the unstable states
-            [temp_label, temp_feature, unstable_states, more_unlikely_activators] = extract_unstable_state(temp_state, temp_transition, temp_time_change, temp_gene, prev_index_list, samp_tab, cluster_id, pt_id, temp_lineage, act_tolerance)
+            [temp_label, temp_feature, unstable_states, more_unlikely_activators] = extract_unstable_state(temp_state, temp_transition, temp_time_change, temp_gene, prev_index_list, samp_tab, cluster_id, pt_id, temp_trajectory, act_tolerance)
             gene_status_label = gene_status_label + temp_label
             feature_mat = pd.concat([feature_mat, temp_feature], axis = 1).copy()
             unlikely_activators = np.concatenate((unlikely_activators, more_unlikely_activators))
             
             # get stable states. aka genes in states that do not change immediately 
-            # TODO add an argument of all the unstable states so we can avoid them even if they are in a different lineage  
-            [temp_label, temp_feature] = extract_stable_state(temp_state, temp_gene, unstable_states, temp_lineage)
+            # TODO add an argument of all the unstable states so we can avoid them even if they are in a different trajectory  
+            [temp_label, temp_feature] = extract_stable_state(temp_state, temp_gene, unstable_states, temp_trajectory)
             gene_status_label = gene_status_label + temp_label
             feature_mat = pd.concat([feature_mat, temp_feature], axis = 1).copy()
         
             # get the steady states 
-            [temp_label, temp_feature] = extract_steady_states(temp_state, temp_gene, temp_lineage)
+            [temp_label, temp_feature] = extract_steady_states(temp_state, temp_gene, temp_trajectory)
             gene_status_label = gene_status_label + temp_label
             feature_mat = pd.concat([feature_mat, temp_feature], axis = 1).copy()
 
