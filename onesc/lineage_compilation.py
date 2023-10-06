@@ -153,7 +153,7 @@ def construct_cluster_network(train_exp, sampTab, initial_clusters, terminal_clu
                     temp_dist.index = list(range(0, temp_dist.shape[0]))
                     my_G.add_edges_from([(temp_dist.loc[0, 'starting'], cluster_name)])
                 except: 
-                    print("Could not construct the cluster/cell state network. Make sure the initial cell state has the lowest average pseuodtime and terminal cell state has the highest average pseudotime. ")
+                    print("Error: Failed to construct the cluster/cell state network. Make sure the initial cell state has the lowest average pseuodtime and terminal cell state has the highest average pseudotime. ")
 
         if cluster_name not in terminal_clusters: 
             out_nodes = [x[1] for x in my_G.out_edges(cluster_name)]
@@ -164,7 +164,7 @@ def construct_cluster_network(train_exp, sampTab, initial_clusters, terminal_clu
                     temp_dist.index = list(range(0, temp_dist.shape[0]))
                     my_G.add_edges_from([(cluster_name, temp_dist.loc[0, 'ending'])])
                 except: 
-                    print("Could not construct the cluster/cell state network. Make sure the initial cell state has the lowest average pseuodtime and terminal cell state has the highest average pseudotime. ")
+                    print("Error: Failed to construct the cluster/cell state network. Make sure the initial cell state has the lowest average pseuodtime and terminal cell state has the highest average pseudotime. ")
     return my_G 
 
 def extract_trajectory(clusters_G, initial_clusters, terminal_clusters): 
