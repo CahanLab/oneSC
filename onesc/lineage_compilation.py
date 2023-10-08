@@ -232,7 +232,7 @@ def construct_cluster_network(train_exp, sampTab, initial_clusters, terminal_clu
     return my_G 
 
 def extract_trajectory(clusters_G, initial_clusters, terminal_clusters): 
-    """Decomposed the networkx dircted graph object into a individual trajectories. The key of the dictionary is the trajectory name, and the items are lists of clusters inside that trajectory. 
+    """Deconstruct the networkx dircted graph object into a individual trajectories. The key of the dictionary is the trajectory name, and the items are lists of clusters inside that trajectory. 
 
     Args:
         clusters_G (networkx.DiGraph): Networkx directed graph object from onesc.construct_cluster_network or manually curated. 
