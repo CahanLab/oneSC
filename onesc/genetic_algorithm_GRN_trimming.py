@@ -3,6 +3,19 @@ import pandas as pd
 import pygad
 
 def define_states(exp_tab, samp_tab, trajectory_cluster, vector_thresh, cluster_col = 'cluster_id', percent_exp = 0.2):
+    """Define the cell state boolean profiles for each of the trajectory. 
+
+    Args:
+        exp_tab (pandas.DataFrame): The single-cell expression profiles. 
+        samp_tab (pandas.DataFrame): The sample table for the single-cell expression profiles. 
+        trajectory_cluster (dict): The output from onesc.extract_trajectory. It is a dictionary detailing the clusters along a trajectory for all trajectories. 
+        vector_thresh (pandas.Series): The output from onesc.find_threshold_vector. It is a pandas Series of the expression threshold for all the genes. 
+        cluster_col (str, optional): The column name of the column in the sample table with cell state/cluster information. Defaults to 'cluster_id'.
+        percent_exp (float, optional): The minimum percent expression of cells in the cell state/cluster for a gene to be considered as ON even if the average expression passes the expression threshold. Defaults to 0.2.
+    
+    Returns:
+        dict: A dictionary containing all the Boolean gene states for different cell state/clusters in a trajectory for all trajectories. 
+    """
     def check_zero(vector):
         return (len(vector) - np.sum(vector == 0)) / len(vector)
     state_dict = dict()
@@ -16,6 +29,14 @@ def define_states(exp_tab, samp_tab, trajectory_cluster, vector_thresh, cluster_
     return state_dict  
 
 def define_transition(state_dict):
+    """Documenting the cell states at which genes transition (ON to OFf or OFF to ON). 
+
+    Args:
+        state_dict (dict): The output from onesc.define_states. It is a dictionary containig all the Boolean gene states for different cell state/clusters in a trajectory for all trajectories. 
+
+    Returns:
+        dict: A dictionary containing all the cell states at which genes transition from ON to OFF or OFF to ON. 
+    """
     transition_dict = dict()
     for trajectory in state_dict.keys():
         temp_df = pd.DataFrame()
@@ -35,7 +56,25 @@ def define_transition(state_dict):
         transition_dict[trajectory] = temp_df
     return transition_dict
 
-def curate_training_data(state_dict, transition_dict, trajectory_time_change_dict, samp_tab, cluster_id = "leiden", pt_id = "dpt_pseudotime",act_tolerance = 0.01, selected_regulators = list()):
+def curate_training_data(state_dict, transition_dict, trajectory_time_change_dict, samp_tab, cluster_id = "cluster_id", pt_id = "dpt_pseudotime",act_tolerance = 0.01, selected_regulators = list()):
+    """Compile training data before running with genetic algorithm. This curates the expression states of the gene (as label) and the expression states (as features) of all transcription regulators at different cell states. 
+       In the event when the gene and a transcription regulator both change at the same cell staste, pseudotime ordering at which the gene and transcription regulator change will be considered when curating gene expression states (label) and transcription regulators expression states (features). 
+       For instance, if transcription regulator change way ahead of target gene change (< target gene change - act_tolerance), then for curating the feature matrix, we would use the post changed status of the transcription regulator. 
+       We will also output unlikely activator for each gene based on finding transcription factors that are inactive at the time when the gene is first activated. We also included an empty array for unlikely repressors in case users want to add them in manually. 
+       
+    Args:
+        state_dict (dict): The output from onesc.define_states. It is a dictionary containing all the Boolean gene states for different cell state/clusters in a trajectory for all trajectories. 
+        transition_dict (dict): The output from onesc.define_transition. It is a dictionary containing all the cell states at which genes transition from ON to OFF or OFF to ON. 
+        trajectory_time_change_dict (dict): The output from onesc.find_gene_change_trajectory. It is a dictionary of pandas dataframes documenting the pseudotime point at which the genes change status across a trajectory. The keys of the dictionary represent the trajectory names, and the items are pandas dataframe document the pseudotime point at which genes change status. 
+        samp_tab (pandas.DataFrame): he sample table for the single-cell expression profiles. 
+        cluster_id (str, optional): The column name of the column in the sample table with cell state/cluster information. Defaults to 'cluster_id'.
+        pt_id (str, optional): The column name of the column in the sample table with pseudotime information. Defaults to "dpt_pseudotime".
+        act_tolerance (float, optional): The range of activation window (pseudotime units). If both target gene and regulator change in the same cell state and if the pseudotime at which the regulator change is < target gene change - act_tolerance, then in the curated gene state in the feature matrix of the regulator would use the postchanged regulator state. Defaults to 0.01.
+        selected_regulators (list, optional): The list of regulators or transcription factors. Defaults to list(). If input an empty list, then assume all genes are capable of transcriptional regulations. 
+
+    Returns:
+        dict: A dictionary of feature matrix, gene status label, unlikely activators and unlikely repressors for each gene ready for genetic algorithm optimization. 
+    """
     all_genes = transition_dict['trajectory_0'].index
 
     def extract_steady_states(state_df, target_gene, trajectory_name):
@@ -245,13 +284,6 @@ def curate_training_data(state_dict, transition_dict, trajectory_time_change_dic
         feature_mat = pd.DataFrame()
         gene_train_dict = dict()
 
-        # get initial state if it is stable for the gene
-        '''
-        stable_initial = check_stable_initial(transition_dict, temp_gene)
-        [temp_label, temp_feature] = extract_stable_initial_state(state_dict, temp_gene, stable_initial)
-        gene_status_label = gene_status_label + temp_label
-        feature_mat = pd.concat([feature_mat, temp_feature], axis = 1).copy()
-        '''
         for temp_trajectory in transition_dict.keys():
             temp_transition = transition_dict[temp_trajectory] # transition matrix 
             temp_state = state_dict[temp_trajectory] # state matrix 
@@ -269,7 +301,6 @@ def curate_training_data(state_dict, transition_dict, trajectory_time_change_dic
             unlikely_activators = np.concatenate((unlikely_activators, more_unlikely_activators))
             
             # get stable states. aka genes in states that do not change immediately 
-            # TODO add an argument of all the unstable states so we can avoid them even if they are in a different trajectory  
             [temp_label, temp_feature] = extract_stable_state(temp_state, temp_gene, unstable_states, temp_trajectory)
             gene_status_label = gene_status_label + temp_label
             feature_mat = pd.concat([feature_mat, temp_feature], axis = 1).copy()
@@ -290,7 +321,24 @@ def curate_training_data(state_dict, transition_dict, trajectory_time_change_dic
         training_dict[temp_gene] = gene_train_dict.copy()
     return training_dict
 
-def GA_fit_data(training_dict, target_gene, corr_matrix, weight_dict = dict(), ideal_edges = 2, num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True):
+def GA_fit_data(training_dict, target_gene, corr_matrix, ideal_edges = 2, num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True):
+    """Identify the regulatory interactions for a gene that minimizes the discrepancy between gene states labels and simulated gene states via regulatory interactions. 
+       This is a helper function for onesc.create_network. 
+
+    Args:
+        training_dict (dict): The output from onesc.curate_training_data. 
+        target_gene (str): The target gene. 
+        corr_matrix (pandas.DataFrame): The correlation matrix 
+        ideal_edges (int, optional): Ideal number of incoming edges per gene. Defaults to 2.
+        num_generations (int, optional): Number of generations for genetic algorithm per gene per iteration. Defaults to 1000.
+        max_iter (int, optional): Maximum number of iterations for genetic algorithm. If the fitness has not change in 3 iterations then stop early. Defaults to 10.
+        num_parents_mating (int, optional): Number of parents for genetic algorithm. Defaults to 4.
+        sol_per_pop (int, optional): Number of solutions to keep per generation for genetic algorithm. Defaults to 10.
+        reduce_auto_reg (bool, optional): If True, remove auto activation is not needed for states satisfaction. Defaults to True.
+
+    Returns:
+        list: A pandas dataframe object containing the regulatory edges for a gene and the fitness score. 
+    """
     unlikely_activators = training_dict[target_gene]['unlikely_activators']
     unlikely_repressors = training_dict[target_gene]['unlikely_repressors']
 
@@ -410,13 +458,6 @@ def GA_fit_data(training_dict, target_gene, corr_matrix, weight_dict = dict(), i
                 else: 
                     fitness_score = fitness_score - (np.abs(corr_col[temp_index]) * 10)
         
-        if len(weight_dict) > 0:
-            for temp_index in list(range(0, len(solution))):
-                if solution[temp_index] == 0:
-                    continue
-                else:
-                    fitness_score = fitness_score + weight_dict[training_data.index[temp_index]]
-
         if np.sum(np.abs(solution)) == 0: # if there are no regulation on the target gene, not even self regulation, then it's not acceptable
             fitness_score = fitness_score - (3 * correct_reward)
         return fitness_score
@@ -486,13 +527,27 @@ def GA_fit_data(training_dict, target_gene, corr_matrix, weight_dict = dict(), i
         
     return [new_edges_df, perfect_fitness_bool]
 
-def create_network(training_dict, corr_matrix, weight_dict = dict(), ideal_edges = 2, num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True): 
+def create_network(training_dict, corr_matrix, ideal_edges = 2, num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True): 
+    """Curate a functional Boolean network using genetic algorithm that minimizes the discrepancy between gene states labels and simulated gene states via regulatory interactions. 
+
+    Args:
+        training_dict (dict): The output from onesc.curate_training_data. 
+        corr_matrix (pandas.DataFrame): The Pearson correlation matrix. Could use any other distance related metrics as well. This metric is used to decide which transcription regulators to choose if there are multiple transcription regulators with the same expression states across cell states. 
+        ideal_edges (int, optional): The ideal number of incoming edges per gene. Defaults to 2.
+        num_generations (int, optional): Number of generations for genetic algorithm per gene per iteration. Defaults to 1000.
+        max_iter (int, optional): Maximum number of iterations for genetic algorithm. If the fitness has not change in 3 iterations then stop early. Defaults to 10.
+        num_parents_mating (int, optional): Number of parents for genetic algorithm. Defaults to 4.
+        sol_per_pop (int, optional): Number of solutions to keep per generation for genetic algorithm. Defaults to 10.
+        reduce_auto_reg (bool, optional): If True, remove auto activation is not needed for states satisfaction. Defaults to True.
+
+    Returns:
+        pandas.DataFrame: The reconstructed network. 
+    """
     total_network = pd.DataFrame()
     for temp_gene in training_dict.keys():
         new_network, perfect_fitness_bool = GA_fit_data(training_dict, 
                                                         temp_gene, 
                                                         corr_matrix = corr_matrix,
-                                                        weight_dict = weight_dict,
                                                         ideal_edges = ideal_edges,
                                                         num_generations = num_generations, 
                                                         max_iter = max_iter, 
@@ -505,462 +560,3 @@ def create_network(training_dict, corr_matrix, weight_dict = dict(), ideal_edges
         else:
             print(temp_gene + " finished fitting")
     return total_network
-
-def create_network_serial(training_dict, regulators_rank_dict = dict(), num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True, max_edge_first = False, max_dup_genes = 2):
-    total_network = pd.DataFrame()
-    for temp_gene in training_dict.keys():
-
-        if temp_gene in regulators_rank_dict.keys(): 
-            rank_regulators_list = regulators_rank_dict[temp_gene]
-        else:
-            rank_regulators_list = list()
-
-        if len(rank_regulators_list) < 4: 
-            rank_list = [len(rank_regulators_list)]
-        else: 
-            rank_list = list(range(4, len(rank_regulators_list) + 1))
-        for end_index in rank_list:
-            sub_rank_reg_list = rank_regulators_list[0:end_index]
-            new_network, perfect_fitness_bool = GA_fit_data(training_dict, 
-                                                            temp_gene, 
-                                                            selected_regulators = sub_rank_reg_list, 
-                                                            num_generations = num_generations, 
-                                                            max_iter = max_iter, 
-                                                            num_parents_mating = num_parents_mating, 
-                                                            sol_per_pop = sol_per_pop, 
-                                                            reduce_auto_reg = reduce_auto_reg, 
-                                                            max_edge_first = max_edge_first, 
-                                                            max_dup_genes = max_dup_genes)
-            if perfect_fitness_bool == True: 
-                break 
-        total_network = pd.concat([total_network, new_network])
-    return total_network
-
-def create_network_iter(training_dict, initial_state, regulators_rank_dict = dict(), num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True, remove_bad_genes = False, max_edge_first = False, max_dup_genes = 2): 
-    total_network = pd.DataFrame()
-    for temp_gene in training_dict.keys():
-
-        if temp_gene in regulators_rank_dict.keys(): 
-            rank_regulators_list = regulators_rank_dict[temp_gene]
-        else:
-            rank_regulators_list = list()
-
-        if len(rank_regulators_list) < 3: 
-            rank_list = [len(rank_regulators_list)]
-        else: 
-            rank_list = list(range(3, len(rank_regulators_list)))
-        for end_index in rank_list:
-            sub_rank_reg_list = rank_regulators_list[0:end_index]
-            new_network, perfect_fitness_bool = GA_fit_data(training_dict, 
-                                                            temp_gene, 
-                                                            initial_state, 
-                                                            selected_regulators = sub_rank_reg_list, 
-                                                            num_generations = num_generations, 
-                                                            max_iter = max_iter, 
-                                                            num_parents_mating = num_parents_mating, 
-                                                            sol_per_pop = sol_per_pop, 
-                                                            reduce_auto_reg = reduce_auto_reg, 
-                                                            remove_bad_genes = remove_bad_genes, 
-                                                            max_edge_first = max_edge_first, 
-                                                            max_dup_genes = max_dup_genes)
-            if perfect_fitness_bool == True: 
-                break 
-
-        if perfect_fitness_bool == False:
-            new_network, perfect_fitness_bool = GA_fit_data(training_dict, 
-                                            temp_gene, 
-                                            initial_state, 
-                                            num_generations = num_generations, 
-                                            max_iter = max_iter, 
-                                            num_parents_mating = num_parents_mating, 
-                                            sol_per_pop = sol_per_pop, 
-                                            reduce_auto_reg = reduce_auto_reg, 
-                                            remove_bad_genes = remove_bad_genes, 
-                                            max_edge_first = max_edge_first, 
-                                            max_dup_genes = max_dup_genes)
-
-        total_network = pd.concat([total_network, new_network])
-    return total_network
-
-def GA_fit_data_penalize(training_dict, target_gene, selected_regulators = list(), regulators_rank = list(), num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True, max_edge_first = False, max_dup_genes = 2): 
-    unlikely_activators = training_dict[target_gene]['unlikely_activators']
-    unlikely_repressors = training_dict[target_gene]['unlikely_repressors']
-
-    training_data = training_dict[target_gene]['feature_matrix']
-    if len(selected_regulators) > 0: 
-        selected_regulators = np.append(selected_regulators, target_gene)
-        selected_regulators = np.unique(selected_regulators)
-        training_data = training_data.loc[selected_regulators, :]
-
-    training_data_original = training_data.copy() # save the dataframe after the removal of genes that are nto active in any states 
-    training_data = training_data.loc[training_data.sum(axis = 1) > 0, :] # remove genes that are not active in any states 
-    training_data = training_data.drop_duplicates() # remove duplicated genes with the same state profiles 
-    
-    training_targets = training_dict[target_gene]['gene_status_labels']
-    feature_dict = dict()
-    rev_feature_dict = dict()
-
-    def to_string_pattern(gene_pattern):
-        gene_pattern = [str(x) for x in gene_pattern]
-        return "_".join(gene_pattern)
-
-    for regulator in training_data_original.index: 
-        gene_pattern = training_data_original.loc[regulator, :]
-        x_str = to_string_pattern(gene_pattern)
-        rev_feature_dict[regulator] = x_str
-        if x_str in feature_dict.keys():
-            feature_dict[x_str] = np.concatenate([feature_dict[x_str], [regulator]])
-        else:
-            feature_dict[x_str] = np.array([regulator])
-
-    # rename the training data 
-    training_data.index = training_data.apply(to_string_pattern, axis = 1)
-    target_gene_pattern = to_string_pattern(training_data_original.loc[target_gene, :]) # get the TG self activation gene profile
-
-    # the sole purpose of the code block below is to isolate the self-regulation out so that if there is a self-inhibiton, we will penalize that 
-    # or if we want to reduce self-activation, we can penalize that as well. The key is to find out where the index of the self-activation 
-    if target_gene_pattern in training_data.index: # if the self-activation profile exists in the training data...it really should unless it was consistently 0 across the board 
-        # if the self regulation pattern match with 1 or more other gene profile, then we isolate out self activation 
-        # in this case, it that self activation happens to be self-inhibition, then we penalize that  
-        if len(feature_dict[target_gene_pattern]) > 1: # if the there are more than at least 1 other gene pattern that is the same as the self regulation
-            feature_dict[target_gene_pattern] = feature_dict[target_gene_pattern][feature_dict[target_gene_pattern] != target_gene]
-            feature_dict[target_gene + "_" + target_gene_pattern] = [target_gene]
-            target_gene_df = training_data_original.loc[target_gene, :].to_frame().T
-            target_gene_df.index = [target_gene + "_" + target_gene_pattern]
-            training_data = pd.concat([training_data, target_gene_df])
-        else:
-            feature_dict.pop(target_gene_pattern)
-            feature_dict[target_gene + "_" + target_gene_pattern] = [target_gene]
-            training_data = training_data.rename(index={target_gene_pattern:target_gene + "_" + target_gene_pattern})
-        # find where the index of self regulation
-        self_reg_index = np.where(training_data.index == target_gene + "_" + target_gene_pattern)[0][0]
-    else:
-        self_reg_index = -1 # if for whatever reason 
-
-    unlikely_activators = np.intersect1d(unlikely_activators, list(rev_feature_dict.keys()))
-    # figure out the index at which bad activators occur 
-    bad_activator_index = list()
-    if len(unlikely_activators) > 0:
-        for temp_bad_activator in unlikely_activators:
-            str_pattern = rev_feature_dict[temp_bad_activator]
-            if not str_pattern in training_data.index:
-                continue
-            bad_activator_index.append(np.where(training_data.index == str_pattern)[0][0])
-        bad_activator_index = np.unique(bad_activator_index)
-
-    unlikely_repressors = np.intersect1d(unlikely_repressors, list(rev_feature_dict.keys()))
-    # figure out the index at which bad activators occur 
-    bad_repressors_index = list()
-    if len(unlikely_repressors) > 0:
-        for temp_bad_repressor in unlikely_repressors:
-            str_pattern = rev_feature_dict[temp_bad_repressor]
-            if not str_pattern in training_data.index:
-                continue
-            bad_repressors_index.append(np.where(training_data.index == str_pattern)[0][0])
-        bad_repressors_index = np.unique(bad_repressors_index)
-    def calc_activation_prob(norm_dict, upTFs): 
-        if len(upTFs) == 0: 
-            return 1
-        elif len(upTFs) == 1: 
-            return norm_dict[upTFs[0]]
-        else: 
-            x1 = 0 
-            x2 = 0
-            for TF in upTFs: 
-                if x1 == 0: 
-                    x1 = norm_dict[TF]
-                elif x2 == 0: 
-                    x2 = norm_dict[TF]
-                    x1 = 1 - ((1 - x1) * (1 - x2))
-                    x2 = 0
-            return x1
-
-    def calc_repression_prob(norm_dict, downTFs): 
-        if len(downTFs) == 0: 
-            return 1
-        elif len(downTFs) == 1: 
-            return 1 - norm_dict[downTFs[0]]
-        else:
-            total_repression = 1
-            for TF in downTFs: 
-                total_repression = total_repression * (1 - norm_dict[TF])
-            return total_repression
-    
-    def max_features_fitness_func(ga_instance, solution, solution_idx):
-        correctness_sum = 0
-
-        for i in range(0, len(training_data.columns)):
-            state = training_data.columns[i]
-            norm_dict = training_data.loc[:, state]
-            upTFs = training_data.index[np.array(solution) == 1]
-            downTFs = training_data.index[np.array(solution) == -1]
-            activation_prob = calc_activation_prob(norm_dict.to_dict(), upTFs)
-            repression_prob = calc_repression_prob(norm_dict.to_dict(), downTFs)
-
-            total_prob = activation_prob * repression_prob
-
-            temp_score = int(total_prob == training_targets[i]) * 1000
-
-            correctness_sum = correctness_sum + temp_score
-        fitness_score = correctness_sum + (np.sum(solution == 1) * 10) + (np.sum(solution == -1) * 15) # if a gene can be either activator or inhibitor, choose inhibitor
-        
-        # penalize unlikely activators 
-        if len(bad_activator_index) > 0: 
-            for temp_index in bad_activator_index: 
-                if solution[temp_index] == 1: 
-                    fitness_score = fitness_score - 40
-        
-        # penalize unlikely repressors
-        if len(bad_repressors_index) > 0: 
-            for temp_index in bad_repressors_index: 
-                if solution[temp_index] == -1: 
-                    fitness_score = fitness_score - 40
-
-        # remove self inhibition since it would not work unless we go on to protein level 
-        if self_reg_index > -1:
-            if solution[self_reg_index] == -1:
-                fitness_score = fitness_score - (3 * 1000)
-            elif solution[self_reg_index] == 1:
-                if reduce_auto_reg == False:
-                    fitness_score = fitness_score  
-                else:
-                    fitness_score = fitness_score - 15 # remove unnecessary auto-activator.
-        
-        fitness_score = fitness_score + np.sum(training_data.loc[np.array(solution) != 0, :].sum()) * 0.001 # favor genes that are turned on across more states 
-        if np.sum(np.abs(solution)) == 0: # if there are no regulation on the target gene, not even self regulation, then it's not acceptable
-            fitness_score = fitness_score - (3 * 1000)
-        return fitness_score
-
-    def min_features_fitness_func(ga_instance, solution, solution_idx):
-        correctness_sum = 0
-        
-        correct_scale = 1000
-        activated_bonus_scale = 0.001
-        
-        # calculate the agreement of the network confirguation with real data
-        for i in range(0, len(training_data.columns)):
-            state = training_data.columns[i]
-            norm_dict = training_data.loc[:, state]
-            upTFs = training_data.index[np.array(solution) == 1]
-            downTFs = training_data.index[np.array(solution) == -1]
-            activation_prob = calc_activation_prob(norm_dict.to_dict(), upTFs)
-            repression_prob = calc_repression_prob(norm_dict.to_dict(), downTFs)
-
-            total_prob = activation_prob * repression_prob
-
-            temp_score = int(total_prob == training_targets[i]) * correct_scale
-            correctness_sum = correctness_sum + temp_score
-
-        #fitness_score = correctness_sum + (np.sum(solution == 0) * 1) + (np.sum(solution == -1) * 0.1) #if an edge can be either activator or inhibitor, choose activator 
-        fitness_score = correctness_sum + (np.sum(solution == 0) * 10) #minimize the number of edges 
-
-        # penalize unlikely activators 
-        if len(bad_activator_index) > 0: 
-            for temp_index in bad_activator_index: 
-                if solution[temp_index] == 1: 
-                    fitness_score = fitness_score - 40
-        
-        # penalize unlikely repressors
-        if len(bad_repressors_index) > 0: 
-            for temp_index in bad_repressors_index: 
-                if solution[temp_index] == -1: 
-                    fitness_score = fitness_score - 40
-
-        # penalize the self inhibitors
-        if self_reg_index > -1:
-            if solution[self_reg_index] == -1:
-                fitness_score = fitness_score - (3 * correct_scale)
-            elif solution[self_reg_index] == 1:
-                if reduce_auto_reg == False:
-                    fitness_score = fitness_score + 15 # add to the fitness to add more self-regulation
-                else:
-                    fitness_score = fitness_score
-        fitness_score = fitness_score + np.sum(training_data.loc[np.array(solution) != 0, :].sum()) * activated_bonus_scale # favor genes that are turned on across more states 
-        #fitness_score = fitness_score + np.sum(training_data.loc[np.array(solution) == -1, :].sum()) * activated_bonus_scale # favor repressive edges  
-        
-        if np.sum(np.abs(solution)) == 0: # if there are no regulation on the target gene, not even self regulation, then it's not acceptable
-            fitness_score = fitness_score - 3000
-        return fitness_score
-
-    # the below are just parameters for the genetic algorithm  
-
-    num_genes = training_data.shape[0]
-
-    parent_selection_type = "sss"
-    keep_parents = num_parents_mating
-    crossover_type = "uniform"
-    
-    mutation_type = "random"
-    mutation_percent_genes = 10
-    #mutation_percent_genes = [40, 10] # maybe try to use number of genes as 
-
-    perfect_fitness = training_data.shape[1] * 1000
-
-    # generate an initial population pool 
-    init_pop_pool = np.random.choice([0, -1, 1], size=(sol_per_pop, num_genes))
-
-    prev_1_fitness = 0 
-    prev_2_fitness = 0 
-    perfect_fitness_bool = False
-
-    for run_cycle in list(range(0, max_iter)):
-        fitness_function = min_features_fitness_func
-        ga_instance_min = pygad.GA(num_generations=num_generations,
-                        num_parents_mating=num_parents_mating,
-                        initial_population=init_pop_pool,
-                        fitness_func=fitness_function,
-                        sol_per_pop=sol_per_pop,
-                        num_genes=num_genes,
-                        parent_selection_type=parent_selection_type,
-                        keep_parents=keep_parents,
-                        crossover_type=crossover_type,
-                        mutation_type=mutation_type,
-                        mutation_percent_genes=mutation_percent_genes, 
-                        suppress_warnings = True,
-                        gene_space = [-1, 0, 1], 
-                        random_seed = 2)
-        ga_instance_min.run()
-        first_solution, first_solution_fitness, first_solution_idx = ga_instance_min.best_solution()
-        
-        fitness_function = max_features_fitness_func
-        ga_instance_max = pygad.GA(num_generations=num_generations,
-            num_parents_mating=num_parents_mating,
-            initial_population=init_pop_pool,
-            fitness_func=fitness_function,
-            sol_per_pop=sol_per_pop,
-            num_genes=num_genes,
-            parent_selection_type=parent_selection_type,
-            keep_parents=keep_parents,
-            crossover_type=crossover_type,
-            mutation_type=mutation_type,
-            mutation_percent_genes=mutation_percent_genes, 
-            suppress_warnings = True,
-            gene_space = [-1, 0, 1], 
-            random_seed = 2)
-        ga_instance_max.run()
-        second_solution, second_solution_fitness, second_solution_idx = ga_instance_max.best_solution()
-        
-        # If both solutions would output perfect reachability, then pick the one preferred by the user
-        if second_solution_fitness >= perfect_fitness and first_solution_fitness >= perfect_fitness:
-            if max_edge_first == False: 
-                solution = first_solution 
-                solution_fitness = first_solution_fitness
-                init_pop_pool = ga_instance_min.population
-            else:
-                solution = second_solution
-                solution_fitness = second_solution_fitness
-                init_pop_pool = ga_instance_max.population
-        else: 
-            if second_solution_fitness > first_solution_fitness:  
-                solution = second_solution
-                solution_fitness = second_solution_fitness
-                init_pop_pool = ga_instance_max.population
-            else:
-                solution = first_solution 
-                solution_fitness = first_solution_fitness
-                init_pop_pool = ga_instance_min.population
-        
-        if solution_fitness >= perfect_fitness: 
-            perfect_fitness_bool = True
-
-        # if the fitness doesn't change for 3 rounds, then break 
-        if solution_fitness == prev_1_fitness and solution_fitness == prev_2_fitness: 
-            break 
-        else: 
-            prev_1_fitness = prev_2_fitness
-            prev_2_fitness = solution_fitness
-
-    new_edges_df = pd.DataFrame()
-    
-    for i in range(0, training_data.shape[0]):
-        if solution[i] == 0:
-            continue
-
-        x_str = training_data.index[i]
-
-        if solution[i] == -1: 
-            reg_type = "-"
-        elif solution[i] == 1: 
-            reg_type = "+"
-        
-        # This is where I would select the top regulator for each state 
-        if len(regulators_rank) == 0: 
-            for regulator in feature_dict[x_str]:
-                temp_edge = pd.DataFrame(data = [[regulator, target_gene, reg_type]], columns = ['TF', 'TG', "Type"])
-                new_edges_df = pd.concat([new_edges_df, temp_edge])
-        else: #TODO make this a little bit more elegant. Maybe instead of using correlation, find other metrics 
-            dup_genes = feature_dict[x_str]
-            reg_rank = np.array(range(0, len(regulators_rank)))
-            intersect_index = np.where(np.isin(regulators_rank, dup_genes))
-
-            intersect_genes = regulators_rank[intersect_index]
-            reg_rank = reg_rank[intersect_index]
-            intersect_genes = intersect_genes[np.argsort(reg_rank)]
-
-            if len(intersect_genes) > max_dup_genes:
-                intersect_genes = intersect_genes[0:max_dup_genes]
-
-            for regulator in intersect_genes:
-                temp_edge = pd.DataFrame(data = [[regulator, target_gene, reg_type]], columns = ['TF', 'TG', "Type"])
-                new_edges_df = pd.concat([new_edges_df, temp_edge])
-            
-    return [new_edges_df, perfect_fitness_bool]
-
-def create_network_penalize(training_dict, selected_regulators_dict = dict(), regulators_rank_dict = dict(), num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True, max_edge_first = False, max_dup_genes = 2): 
-    total_network = pd.DataFrame()
-    for temp_gene in training_dict.keys():
-        if temp_gene in selected_regulators_dict.keys():
-            selected_regulators_list = selected_regulators_dict[temp_gene]
-        else:
-            selected_regulators_list = list()
-
-        if temp_gene in regulators_rank_dict.keys():
-            regulators_rank_list = regulators_rank_dict[temp_gene]
-        else:
-            regulators_rank_list = list()
-        
-        new_network, perfect_fitness_bool = GA_fit_data_penalize(training_dict, 
-                                                        temp_gene, 
-                                                        selected_regulators = selected_regulators_list, 
-                                                        regulators_rank = regulators_rank_list,
-                                                        num_generations = num_generations, 
-                                                        max_iter = max_iter, 
-                                                        num_parents_mating = num_parents_mating, 
-                                                        sol_per_pop = sol_per_pop, 
-                                                        reduce_auto_reg = reduce_auto_reg, 
-                                                        max_edge_first = max_edge_first, 
-                                                        max_dup_genes = max_dup_genes)
-        if perfect_fitness_bool == False:
-            new_network, perfect_fitness_bool = GA_fit_data_penalize(training_dict, 
-                                            temp_gene, 
-                                            regulators_rank = regulators_rank_list,
-                                            num_generations = num_generations, 
-                                            max_iter = max_iter, 
-                                            num_parents_mating = num_parents_mating, 
-                                            sol_per_pop = sol_per_pop, 
-                                            reduce_auto_reg = reduce_auto_reg, 
-                                            max_edge_first = max_edge_first, 
-                                            max_dup_genes = max_dup_genes)
-        total_network = pd.concat([total_network, new_network])
-        if perfect_fitness_bool == False: 
-            print(temp_gene + " does not fit perfectly")
-    return total_network
-
-def define_weight(state_dict):
-    weight_dict = dict()
-    max_len = 0
-    for traj in state_dict.keys():
-        temp_state = state_dict[traj]
-        if temp_state.shape[1] > max_len:
-            max_len = temp_state.shape[1]
-        for temp_col_index in range(0, temp_state.shape[1]):
-            active_genes_list = temp_state.index[temp_state.iloc[:, temp_col_index] == 1]
-            for active_gene in active_genes_list:
-                if active_gene in weight_dict.keys():
-                    if temp_col_index < weight_dict[active_gene]:
-                        weight_dict[active_gene] = temp_col_index
-                else:
-                    weight_dict[active_gene] = temp_col_index
-    for temp_gene in weight_dict.keys():
-        weight_dict[temp_gene] = max_len - weight_dict[temp_gene]
-    return weight_dict

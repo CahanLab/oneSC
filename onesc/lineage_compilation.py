@@ -166,7 +166,7 @@ def construct_cluster_network(train_exp, sampTab, initial_clusters, terminal_clu
         sampTab (pandas.DataFrame): The sample table for the single-cell expression table. 
         initial_clusters (list): A list of user defined initial cell states or clusters. 
         terminal_clusters (list): A list of user defined terminal cell states or clusters. 
-        cluster_col (str, optional): The column name for column containing cell states information. Defaults to "cluster_id".
+        cluster_col (str, optional): The column name for column in the sample table containing cell states information. Defaults to "cluster_id".
         pseudo_col (str, optional): The column name for column containing pseudotime information. Defaults to "pseudotime".
 
     Returns:
