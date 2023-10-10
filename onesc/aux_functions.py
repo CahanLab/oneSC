@@ -249,6 +249,3 @@ def suggest_dynamic_TFs(exp_tab, samp_tab, tf_list, cluster_col, n_top_genes = 2
     average_df = average_df.loc[average_df['logfold'] > logfold_cutoff, :].copy()
     average_df = average_df.loc[average_df['pct_exp'] > pct_exp_cutoff, :].copy()
     return average_df
-
-def calc_corr(train_exp):
-    return train_exp.T.corr()

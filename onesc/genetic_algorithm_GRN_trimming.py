@@ -319,9 +319,39 @@ def curate_training_data(state_dict, transition_dict, trajectory_time_change_dic
         gene_train_dict['unlikely_activators'] = unlikely_activators.copy()
         gene_train_dict['unlikely_repressors'] = unlikely_repressors.copy()
         training_dict[temp_gene] = gene_train_dict.copy()
+    
+    def define_weight(state_dict):
+        """Define the rank weight of the transcription regulators. In this function, the earlier along the trajectory a gene is activated, the higher the weight (more likely to get assigned to regulate other genes). 
+        The users can design their own weight dictionary if they want. As long as the format is consistent with the output of this function. 
+
+        Args:
+            state_dict (dict): The output from onesc.define_states. It is a dictionary containing all the cell states at which genes transition from ON to OFF or OFF to ON. 
+
+        Returns:
+            dict: A dictionary of weights that are related to how early does the gene become active for all the genes. 
+        """
+        weight_dict = dict()
+        max_len = 0
+        for traj in state_dict.keys():
+            temp_state = state_dict[traj]
+            if temp_state.shape[1] > max_len:
+                max_len = temp_state.shape[1]
+            for temp_col_index in range(0, temp_state.shape[1]):
+                active_genes_list = temp_state.index[temp_state.iloc[:, temp_col_index] == 1]
+                for active_gene in active_genes_list:
+                    if active_gene in weight_dict.keys():
+                        if temp_col_index < weight_dict[active_gene]:
+                            weight_dict[active_gene] = temp_col_index
+                    else:
+                        weight_dict[active_gene] = temp_col_index
+        for temp_gene in weight_dict.keys():
+            weight_dict[temp_gene] = max_len - weight_dict[temp_gene]
+        return weight_dict
+
+    training_dict['weight_dict'] = define_weight(state_dict)
     return training_dict
 
-def GA_fit_data(training_dict, target_gene, corr_matrix, ideal_edges = 2, num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True):
+def GA_fit_data(training_dict, target_gene, corr_matrix, weight_dict, ideal_edges = 2, num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True):
     """Identify the regulatory interactions for a gene that minimizes the discrepancy between gene states labels and simulated gene states via regulatory interactions. 
        This is a helper function for onesc.create_network. 
 
@@ -458,6 +488,12 @@ def GA_fit_data(training_dict, target_gene, corr_matrix, ideal_edges = 2, num_ge
                 else: 
                     fitness_score = fitness_score - (np.abs(corr_col[temp_index]) * 10)
         
+        for temp_index in list(range(0, len(solution))):
+            if solution[temp_index] == 0:
+                continue
+            else:
+                fitness_score = fitness_score + weight_dict[training_data.index[temp_index]]
+
         if np.sum(np.abs(solution)) == 0: # if there are no regulation on the target gene, not even self regulation, then it's not acceptable
             fitness_score = fitness_score - (3 * correct_reward)
         return fitness_score
@@ -544,10 +580,14 @@ def create_network(training_dict, corr_matrix, ideal_edges = 2, num_generations 
         pandas.DataFrame: The reconstructed network. 
     """
     total_network = pd.DataFrame()
+    weight_dict = training_dict['weight_dict']
     for temp_gene in training_dict.keys():
+        if temp_gene == 'weight_dict':
+            continue
         new_network, perfect_fitness_bool = GA_fit_data(training_dict, 
                                                         temp_gene, 
                                                         corr_matrix = corr_matrix,
+                                                        weight_dict = weight_dict,
                                                         ideal_edges = ideal_edges,
                                                         num_generations = num_generations, 
                                                         max_iter = max_iter, 
@@ -560,3 +600,6 @@ def create_network(training_dict, corr_matrix, ideal_edges = 2, num_generations 
         else:
             print(temp_gene + " finished fitting")
     return total_network
+
+def calc_corr(train_exp):
+    return train_exp.T.corr()
