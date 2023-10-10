@@ -6,19 +6,14 @@ class OneSC_simulator(object):
     def __init__(self): 
         self.networks_compilation = dict()
         self.sim_exp = None
-        #self.sim_protein = None 
-        self.TFs = None 
     def add_network_compilation(self, subnet_name, subnet_obj): 
         self.networks_compilation[subnet_name] = subnet_obj
     
     def calc_scale_expression(self, raw_exp, TF_norm_factors):
-        TF_max = TF_norm_factors['max']
-        TF_min = TF_norm_factors['min']
         TF_mid = TF_norm_factors['b']
         TF_scale = TF_norm_factors['m']
 
         scaled_exp = 1 / (1 + np.exp(-TF_scale * (raw_exp - TF_mid)))
-        #scaled_exp = (raw_exp - TF_min) / (TF_max - TF_min)
         if scaled_exp < 0: 
             scaled_exp = 0.001
         if scaled_exp > 1: 
@@ -60,7 +55,6 @@ class OneSC_simulator(object):
         activation_prob = calc_activation_prob(norm_dict, TG_gene_obj.regulation_combo["activation"])
         repression_prob = calc_repression_prob(norm_dict, TG_gene_obj.regulation_combo["repression"])
         
-        sigmoid_parameters = TG_gene_obj.sigmoid_parameters
         total_prob = activation_prob * repression_prob 
         if total_prob > 1: 
             total_prob = 1
@@ -86,8 +80,7 @@ class OneSC_simulator(object):
                 time_df.loc[:, time_point] = prev_exp
                 
                 norm_dict = dict()
-                for TF in self.TFs:
-                    TF_gene_obj = network_model[TF]
+                for TF in network_model.keys():
                     TF_norm_factors = network_model[TF].norm_factors
                     scaled_exp = self.calc_scale_expression(prev_exp[TF], TF_norm_factors)
                     norm_dict[TF] = scaled_exp 

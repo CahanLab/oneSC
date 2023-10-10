@@ -1,15 +1,12 @@
 import numpy as np 
 import pandas as pd 
 from .gene import *
-from sklearn.neighbors import KDTree
-from scipy.optimize import curve_fit
 
 class network_structure(object):
-    def __init__(self, subnet_name):
-        self.subnet_name = subnet_name
+    def __init__(self):
         self.network_dict = dict()
         
-    def train_grn(self, grn_tab, max_val = 2, min_val = 0.02, m = 7):
+    def fit_grn(self, grn_tab, max_val = 2, min_val = 0.02, m = 7):
         network_dict = dict()
    
         all_genes = np.concatenate((np.unique(grn_tab['TF']), np.unique(grn_tab['TG'])))
@@ -20,7 +17,7 @@ class network_structure(object):
             temp_grn = grn_tab.loc[grn_tab['TG'] == temp_gene, :]
             temp_TFs = np.unique(temp_grn['TF'])
             
-            gene_obj = gene("normal", "temp_gene")
+            gene_obj = gene()
             gene_obj.add_upstream_genes(temp_TFs)
 
             temp_combo_dict = dict()

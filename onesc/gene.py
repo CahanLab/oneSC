@@ -1,9 +1,6 @@
 class gene(object): 
 
-    def __init__(self, gene_class, gene_name):
-        
-        self.gene_class = gene_class
-        self.gene_name = gene_name
+    def __init__(self):
 
         self.upstream_genes = []
         self.regulation_combo = dict()
@@ -14,7 +11,6 @@ class gene(object):
 
         self.sigmoid_parameters = dict()
         self.linear_parameters = dict()
-
 
     def add_upstream_genes(self, upstream_genes):
         self.upstream_genes = upstream_genes
