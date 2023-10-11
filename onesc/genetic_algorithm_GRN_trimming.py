@@ -575,8 +575,7 @@ def GA_fit_data(training_dict, target_gene, corr_matrix, weight_dict = dict(), i
         
     return [new_edges_df, perfect_fitness_bool]
 
-
-def create_network(training_dict, corr_matrix, weight_dict = dict(), ideal_edges = 2, num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True, mutation_percent_genes = 20): 
+def create_network(training_dict, corr_matrix, ideal_edges = 2, num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True, mutation_percent_genes = 20, GA_seed = 2): 
     """Curate a functional Boolean network using genetic algorithm that minimizes the discrepancy between gene states labels and simulated gene states via regulatory interactions. 
 
     Args:
@@ -589,6 +588,7 @@ def create_network(training_dict, corr_matrix, weight_dict = dict(), ideal_edges
         sol_per_pop (int, optional): Number of solutions to keep per generation for genetic algorithm. Defaults to 10.
         reduce_auto_reg (bool, optional): If True, remove auto activation is not needed for states satisfaction. Defaults to True.
         mutation_percent_genes (float, optional): The mutation percentage. Defaults to 25. 
+        GA_seed (int, optional): The seed for genetic algorithm. Defaults to 2. 
     Returns:
         pandas.DataFrame: The reconstructed network. 
     """
@@ -643,9 +643,6 @@ def create_network(training_dict, corr_matrix, weight_dict = dict(), ideal_edges
                     if norm_dict[TF] == 1:
                         return 0
                 return 1
-        
-        correctness_sum = 0
-        fitness_score = 0
 
         def max_features_fitness_func(ga_instance, solution, solution_idx):
             correctness_sum = 0
@@ -677,9 +674,10 @@ def create_network(training_dict, corr_matrix, weight_dict = dict(), ideal_edges
             
             # if the number of edges stay below ideal edge, then we add in the reward 
             if np.sum(np.abs(solution)) > ideal_edges:
-                fitness_score = correctness_sum + edge_limit_penalty
+                fitness_score = fitness_score + edge_limit_penalty
+                fitness_score = fitness_score - ((np.sum(np.abs(solution)) - ideal_edges) * 2 * additional_edge_reward)
             else:
-                fitness_score = correctness_sum + edge_limit_rewards
+                fitness_score = fitness_score + edge_limit_rewards
 
             # penalize unlikely activators 
             if len(bad_activator_index) > 0: 
@@ -725,7 +723,17 @@ def create_network(training_dict, corr_matrix, weight_dict = dict(), ideal_edges
                     if solution[temp_index] == 0:
                         continue
                     else:
-                        fitness_score = fitness_score + weight_dict[training_data.index[temp_index]]
+                        target_gene_weight = weight_dict[target_gene] + 1
+                        max_distance = max(weight_dict.values()) - target_gene_weight
+                        if weight_dict[training_data.index[temp_index]] - target_gene_weight < 0: 
+                            additional_scores = weight_dict[training_data.index[temp_index]] - target_gene_weight
+                        else: 
+                            if max_distance < 0: 
+                                additional_scores = 0 
+                            else:
+                                additional_scores = max_distance - (weight_dict[training_data.index[temp_index]] - target_gene_weight)
+                        fitness_score = fitness_score + additional_scores * 10
+                        #fitness_score = fitness_score + weight_dict[training_data.index[temp_index]] * 10
 
             if np.sum(np.abs(solution)) == 0: # if there are no regulation on the target gene, not even self regulation, then it's not acceptable
                 fitness_score = fitness_score - (3 * correct_reward)
@@ -744,7 +752,8 @@ def create_network(training_dict, corr_matrix, weight_dict = dict(), ideal_edges
         perfect_fitness = training_data.shape[1] * 1000000 * corr_matrix.shape[0] # remove the weight_dict entry
 
         # generate an initial population pool 
-        init_pop_pool = np.random.choice([0, -1, 1], size=(sol_per_pop, num_genes))
+        prng = np.random.default_rng(2023)
+        init_pop_pool = prng.choice([0, -1, 1], size=(sol_per_pop, num_genes))
 
         prev_1_fitness = 0 
         prev_2_fitness = 0 
@@ -765,7 +774,7 @@ def create_network(training_dict, corr_matrix, weight_dict = dict(), ideal_edges
                 mutation_percent_genes=mutation_percent_genes, 
                 suppress_warnings = True,
                 gene_space = [-1, 0, 1], 
-                random_seed = 2)
+                random_seed = GA_seed)
             ga_instance_max.run()
             solution, solution_fitness, solution_idx = ga_instance_max.best_solution()
             
