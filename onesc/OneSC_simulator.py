@@ -64,8 +64,7 @@ class OneSC_simulator(object):
         return reg_coefficient * total_prob
             
     def simulate_exp(self, initial_exp_dict, initial_subnet, perturb_dict = dict(), decay_rate = 0.1, num_sim = 1000, t_interval = 0.01, noise_amp = 2, stochasticity = True, random_seed = 0):
-        np.random.seed(random_seed)
-        
+        prng = np.random.default_rng(random_seed)        
         time_series_col = list(range(0, num_sim))
         time_df = pd.DataFrame(data = None, index = initial_exp_dict.keys(), columns = time_series_col)
 
@@ -97,7 +96,7 @@ class OneSC_simulator(object):
                         production_signal = (prev_exp[gene_name] - network_model[gene_name].norm_factors['min'])
                         if production_signal < 0: 
                             production_signal = prev_exp[gene_name]
-                        noise_p = np.random.normal(0, t_interval) * (production_signal ** 0.5)
+                        noise_p = prng.normal(0, t_interval) * (production_signal ** 0.5)
                         noise_term = noise_p * noise_amp
                     else: 
                         noise_term = 0 
