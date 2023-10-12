@@ -724,29 +724,6 @@ def create_network(training_dict, corr_matrix, ideal_edges = 2, num_generations 
                     if solution[temp_index] == 0:
                         continue
                     else:
-                        '''
-                        max_distance = max(weight_dict.values())
-                        if weight_dict[target_gene] == max_distance: # if the current gene is at the top of the hierarchy 
-                            if weight_dict[training_data.index[temp_index]] == weight_dict[target_gene]:
-                                additional_scores = 5
-                            else:
-                                additional_scores = -1
-                        else: 
-                            if weight_dict[training_data.index[temp_index]] == (weight_dict[target_gene] + 1):
-                                additional_scores = 5
-                            elif weight_dict[training_data.index[temp_index]] == weight_dict[target_gene]:
-                                additional_scores = 2
-                            elif weight_dict[training_data.index[temp_index]] == (weight_dict[target_gene] + 2):
-                                additional_scores = 2
-                            else:
-                                additional_scores = -1
-
-                        fitness_score = fitness_score + (additional_scores * 1)
-                        '''
-
-                        # fitness_score = fitness_score + (additional_scores * 2)
-                        #fitness_score = fitness_score + (weight_dict[training_data.index[temp_index]] * 2)
-
                         if weight_dict[training_data.index[temp_index]] > (weight_dict[target_gene] + 1):
                             fitness_score = fitness_score - 1
                         else:
