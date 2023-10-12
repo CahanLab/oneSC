@@ -676,7 +676,7 @@ def create_network(training_dict, corr_matrix, ideal_edges = 2, num_generations 
             # if the number of edges stay below ideal edge, then we add in the reward 
             if np.sum(np.abs(solution)) > ideal_edges:
                 fitness_score = fitness_score + edge_limit_penalty
-                fitness_score = fitness_score - ((np.sum(np.abs(solution)) - ideal_edges) * 2 * additional_edge_reward)
+                #fitness_score = fitness_score - ((np.sum(np.abs(solution)) - ideal_edges) * 2 * additional_edge_reward)
             else:
                 fitness_score = fitness_score + edge_limit_rewards
 
@@ -724,17 +724,33 @@ def create_network(training_dict, corr_matrix, ideal_edges = 2, num_generations 
                     if solution[temp_index] == 0:
                         continue
                     else:
-                        target_gene_weight = weight_dict[target_gene] + 1
-                        max_distance = max(weight_dict.values()) - target_gene_weight
-                        if weight_dict[training_data.index[temp_index]] - target_gene_weight < 0: 
-                            additional_scores = weight_dict[training_data.index[temp_index]] - target_gene_weight
-                        else: 
-                            if max_distance < 0: 
-                                additional_scores = 0 
+                        '''
+                        max_distance = max(weight_dict.values())
+                        if weight_dict[target_gene] == max_distance: # if the current gene is at the top of the hierarchy 
+                            if weight_dict[training_data.index[temp_index]] == weight_dict[target_gene]:
+                                additional_scores = 5
                             else:
-                                additional_scores = max_distance - (weight_dict[training_data.index[temp_index]] - target_gene_weight)
-                        fitness_score = fitness_score + additional_scores * 10
-                        #fitness_score = fitness_score + weight_dict[training_data.index[temp_index]] * 10
+                                additional_scores = -1
+                        else: 
+                            if weight_dict[training_data.index[temp_index]] == (weight_dict[target_gene] + 1):
+                                additional_scores = 5
+                            elif weight_dict[training_data.index[temp_index]] == weight_dict[target_gene]:
+                                additional_scores = 2
+                            elif weight_dict[training_data.index[temp_index]] == (weight_dict[target_gene] + 2):
+                                additional_scores = 2
+                            else:
+                                additional_scores = -1
+
+                        fitness_score = fitness_score + (additional_scores * 1)
+                        '''
+
+                        # fitness_score = fitness_score + (additional_scores * 2)
+                        #fitness_score = fitness_score + (weight_dict[training_data.index[temp_index]] * 2)
+
+                        if weight_dict[training_data.index[temp_index]] > (weight_dict[target_gene] + 1):
+                            fitness_score = fitness_score - 1
+                        else:
+                            fitness_score = fitness_score + weight_dict[training_data.index[temp_index]] # this works the best 
 
             if np.sum(np.abs(solution)) == 0: # if there are no regulation on the target gene, not even self regulation, then it's not acceptable
                 fitness_score = fitness_score - (3 * correct_reward)
