@@ -9,7 +9,7 @@ import scanpy as sc
 import multiprocessing as mp
 import os
 
-def simulate_parallel(OneCC_simulator, init_exp_dict, num_runs = 10, output_dir = "", num_sim = 1000, t_interval = 0.1, noise_amp = 0.1):
+def simulate_parallel(OneSC_simulator, init_exp_dict, network_name, num_runs = 10, output_dir = "", num_sim = 1000, t_interval = 0.1, noise_amp = 0.1):
     pool = mp.pool.ThreadPool(mp.cpu_count() - 1)
     num_runs_list = list(range(0, num_runs)) 
     if output_dir[len(output_dir) - 1] != "/":
@@ -19,8 +19,8 @@ def simulate_parallel(OneCC_simulator, init_exp_dict, num_runs = 10, output_dir 
         raise Exception("Please input a valid output directory")
     def run_parallel(i):
         np.random.seed(i)
-        OneCC_simulator.simulate_exp(init_exp_dict, "OneCC", num_sim = num_sim, t_interval = t_interval, noise_amp = noise_amp, random_seed = i)
-        sim_exp = OneCC_simulator.sim_exp.copy()
+        OneSC_simulator.simulate_exp(init_exp_dict, network_name, num_sim = num_sim, t_interval = t_interval, noise_amp = noise_amp, random_seed = i)
+        sim_exp = OneSC_simulator.sim_exp.copy()
         sim_exp.to_csv(output_dir + str(i) + "_simulated_exp.csv")
     pool.map(run_parallel, num_runs_list) 
 
