@@ -21,7 +21,7 @@ def simulate_parallel(OneSC_simulator, init_exp_dict, network_name, num_runs = 1
         np.random.seed(i)
         OneSC_simulator.simulate_exp(init_exp_dict, network_name, num_sim = num_sim, t_interval = t_interval, noise_amp = noise_amp, random_seed = i)
         sim_exp = OneSC_simulator.sim_exp.copy()
-        sim_exp.to_csv(output_dir + str(i) + "_simulated_exp.csv")
+        sim_exp.to_csv(os.path.join(output_dir, str(i) + "_simulated_exp.csv"))
     pool.map(run_parallel, num_runs_list) 
 
 def UMAP_embedding_train(train_exp): 
