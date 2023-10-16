@@ -320,34 +320,6 @@ def curate_training_data(state_dict, transition_dict, trajectory_time_change_dic
         gene_train_dict['unlikely_repressors'] = unlikely_repressors.copy()
         training_dict[temp_gene] = gene_train_dict.copy()
     
-    def define_weight(state_dict):
-        """Define the rank weight of the transcription regulators. In this function, the earlier along the trajectory a gene is activated, the higher the weight (more likely to get assigned to regulate other genes). 
-        The users can design their own weight dictionary if they want. As long as the format is consistent with the output of this function. 
-
-        Args:
-            state_dict (dict): The output from onesc.define_states. It is a dictionary containing all the cell states at which genes transition from ON to OFF or OFF to ON. 
-
-        Returns:
-            dict: A dictionary of weights that are related to how early does the gene become active for all the genes. 
-        """
-        weight_dict = dict()
-        max_len = 0
-        for traj in state_dict.keys():
-            temp_state = state_dict[traj]
-            if temp_state.shape[1] > max_len:
-                max_len = temp_state.shape[1]
-            for temp_col_index in range(0, temp_state.shape[1]):
-                active_genes_list = temp_state.index[temp_state.iloc[:, temp_col_index] == 1]
-                for active_gene in active_genes_list:
-                    if active_gene in weight_dict.keys():
-                        if temp_col_index < weight_dict[active_gene]:
-                            weight_dict[active_gene] = temp_col_index
-                    else:
-                        weight_dict[active_gene] = temp_col_index
-        for temp_gene in weight_dict.keys():
-            weight_dict[temp_gene] = max_len - weight_dict[temp_gene]
-        return weight_dict
-
     training_dict['weight_dict'] = define_weight(state_dict)
     return training_dict
 
@@ -580,8 +552,18 @@ def calc_corr(train_exp):
     return train_exp.T.corr()
 
 def define_weight(state_dict):
+    """Define the rank weight of the transcription regulators. In this function, the earlier along the trajectory a gene is activated, the higher the weight (more likely to get assigned to regulate other genes). 
+    The users can design their own weight dictionary if they want. As long as the format is consistent with the output of this function. 
+
+    Args:
+        state_dict (dict): The output from onesc.define_states. It is a dictionary containing all the cell states at which genes transition from ON to OFF or OFF to ON. 
+
+    Returns:
+        dict: A dictionary of weights that are related to how early does the gene become active for all the genes. 
+    """
     weight_dict = dict()
     max_len = 0
+    all_genes = state_dict[list(state_dict.keys())[0]].index
     for traj in state_dict.keys():
         temp_state = state_dict[traj]
         if temp_state.shape[1] > max_len:
@@ -594,6 +576,9 @@ def define_weight(state_dict):
                         weight_dict[active_gene] = temp_col_index
                 else:
                     weight_dict[active_gene] = temp_col_index
-    for temp_gene in weight_dict.keys():
-        weight_dict[temp_gene] = max_len - weight_dict[temp_gene]
+    for temp_gene in all_genes:
+        if temp_gene in weight_dict.keys():
+            weight_dict[temp_gene] = max_len - weight_dict[temp_gene]
+        else: 
+            weight_dict[temp_gene] = 0
     return weight_dict
