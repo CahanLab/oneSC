@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import pygad
 
-def define_states(exp_tab, samp_tab, trajectory_cluster, vector_thresh, cluster_col = 'cluster_id', percent_exp = 0.2):
+def define_states(exp_tab, samp_tab, trajectory_cluster, vector_thresh, cluster_col = 'cluster_id', percent_exp = 0.3):
     """Define the cell state boolean profiles for each of the trajectory. 
 
     Args:
