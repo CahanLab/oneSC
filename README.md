@@ -51,7 +51,7 @@ We can visualize the networkx strcture of cluster-cluster transition graph.
 ```
 nx.draw(clusters_G, with_labels = True)
 ```
-<img src="img/cluster_cluster_graph.png">
+<img src="img/cluster_cluster_graph.png" width="400">
 
 Run the GRN inference step and save the GRN. 
 ```
