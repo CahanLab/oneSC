@@ -53,7 +53,7 @@ nx.draw(clusters_G, with_labels = True)
 ```
 <img src="img/cluster_cluster_graph.png">
 
-Run the GRN inference 
+Run the GRN inference step and save the GRN. 
 ```
 # extract inidividual trajectories found in the data 
 lineage_cluster = onesc.extract_trajectory(clusters_G,initial_clusters, end_clusters)
@@ -76,7 +76,7 @@ training_data = onesc.curate_training_data(state_dict, transition_dict, lineage_
 # calculate the pearson correlation between genes. This adds more information during the inference step. 
 corr_mat = onesc.calc_corr(train_exp)
 
-# infer the gene regulatory network 
+# infer the gene regulatory network
 ideal_edge_num = round(0.4 * corr_mat.shape[1])
 inferred_grn = onesc.create_network(training_data, 
                                     corr_mat, 
@@ -87,4 +87,19 @@ inferred_grn = onesc.create_network(training_data,
                                     sol_per_pop = 30, 
                                     reduce_auto_reg = True)
 inferred_grn.to_csv("OneSC_network.csv")
+```
+You can print the inferred GRN out. 
+```
+print(inferred_grn)
+
+#       TF     TG Type
+#0    Fli1  Cebpa    -
+#1   Gata1  Cebpa    -
+#2   Gfi1b  Cebpa    -
+#3    Klf1  Cebpa    -
+#4   Zfpm1  Cebpa    -
+#5   Gata1  Cebpe    -
+#6   Gata2  Cebpe    -
+#7    Irf8  Cebpe    -
+# ...
 ```
