@@ -30,6 +30,7 @@ import numpy as np
 import pandas as pd 
 import onesc 
 import networkx as nx
+import pickle 
 ```
 
 Load in the training data. 
@@ -87,8 +88,12 @@ inferred_grn = onesc.create_network(training_data,
                                     sol_per_pop = 30, 
                                     reduce_auto_reg = True)
 inferred_grn.to_csv("OneSC_network.csv")
+
+# save the dictionary of Boolean states into a pickle object. 
+# we will be needing the Boolean profiles of initial state for running simulations 
+pickle.dump(state_dict, open("state_dict.pickle", "wb"))
 ```
-You can print the inferred GRN out. 
+You can print the inferred GRN out. It should look like something below. 
 ```
 print(inferred_grn)
 
