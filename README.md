@@ -57,18 +57,25 @@ Run the GRN inference
 ```
 # extract inidividual trajectories found in the data 
 lineage_cluster = onesc.extract_trajectory(clusters_G,initial_clusters, end_clusters)
+
 # find the boolean threshold for each gene 
 vector_thresh = onesc.find_threshold_vector(train_exp, samp_tab, cluster_col = "cell_types", cutoff_percentage=0.4)
+
 # identify the finner time steps at which genes change along individual trajectory 
-lineage_time_change_dict = onesc.find_gene_change_trajectory(train_exp, samp_tab, lineage_cluster, cluster_col, pt_col, vector_thresh, pseudoTime_bin=0.01) # this pseudotime bin could be 
+lineage_time_change_dict = onesc.find_gene_change_trajectory(train_exp, samp_tab, lineage_cluster, cluster_col, pt_col, vector_thresh, pseudoTime_bin=0.01) 
+
 # define boolean states profiles for each cell cluster 
 state_dict = onesc.define_states(train_exp, samp_tab, lineage_cluster, vector_thresh, cluster_col, percent_exp = 0.3)
+
 # define transition profiles for each cell clusters
 transition_dict = onesc.define_transition(state_dict)
+
 # curate the training data for inference of GRN for each gene 
 training_data = onesc.curate_training_data(state_dict, transition_dict, lineage_time_change_dict, samp_tab, cluster_id = cluster_col, pt_id = pt_col,act_tolerance = 0.04)
-# calculate the pearson correlation between genes 
+
+# calculate the pearson correlation between genes. This adds more information during the inference step. 
 corr_mat = onesc.calc_corr(train_exp)
+
 # infer the gene regulatory network 
 ideal_edge_num = round(0.4 * corr_mat.shape[1])
 inferred_grn = onesc.create_network(training_data, 
