@@ -1,6 +1,6 @@
 # OneSC (One Synthetic Cell) 
 
-### Introduction <a name="introduction"></a>
+### <a name="introduction">Introduction</a>
 OneSC is an computational tool for inferring and simulating core transcription factors circuits. 
 
 Below is a walk-through tutorial on 
@@ -19,9 +19,9 @@ Below is a walk-through tutorial on
 
 [Optional - Identification of dynamic TFs](#identifyDynTFs)
 
-### Installation <a name="installation"></a>
+### <a name="installation">Installation</a>
 
-### Inference of GRN <a name="grnInference"></a>
+### <a name="grnInference">Inference of GRN </a>
 In the tutorial, we are going to use the mouse myeloid single-cell data from [Paul et al, 2015](https://www.cell.com/cell/fulltext/S0092-8674(15)01493-2?_returnURL=https%3A%2F%2Flinkinghub.elsevier.com%2Fretrieve%2Fpii%2FS0092867415014932%3Fshowall%3Dtrue). You can download the [expression profiles of core transcription factors]() and the [sample table]() with pusedotime and cluster information. 
 
 Import the required packages. 
