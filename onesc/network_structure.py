@@ -3,10 +3,23 @@ import pandas as pd
 from .gene import *
 
 class network_structure(object):
+    """A network structure that organizes the upstream regulators and logistic regression models for each gene. 
+    """
     def __init__(self):
+        """Constructor for a network_structure object 
+        """
         self.network_dict = dict()
         
     def fit_grn(self, grn_tab, max_val = 2, min_val = 0.02, m = 7):
+        """Fit a systems of equations modelling the transcription regulations governed by a inferred gene regulatory network.
+           Set the parameters of logistic function that model the percent activity (for transcription factors) from expression values. 
+
+        Args:
+            grn_tab (pd.DataFrame): A pandas dataframe of inferred GRN. TF column represents the regulator, TG column represents target genes and Type column represents the type of regulation (+ or -). 
+            max_val (int, optional): The maximum simulated expression value. Defaults to 2.
+            min_val (float, optional): The minimum simulated expression value. Defaults to 0.02.
+            m (int, optional): The logistic growth rate or steepness of the curve. Defaults to 7.
+        """
         network_dict = dict()
    
         all_genes = np.concatenate((np.unique(grn_tab['TF']), np.unique(grn_tab['TG'])))

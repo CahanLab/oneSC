@@ -3,24 +3,57 @@ import pandas as pd
 from .gene import *
 
 class OneSC_simulator(object): 
+    """
+    Simulator of gene expression dynamics 
+    """
     def __init__(self): 
+        """Constructor for a OneSC_simulator object
+        """
         self.networks_compilation = dict()
         self.sim_exp = None
+
     def add_network_compilation(self, subnet_name, subnet_obj): 
+        """Add the fitted network structure for simulation. 
+
+        Args:
+            subnet_name (str): The name given to the network. 
+            subnet_obj (network_structure): A fitted network structure of inferred gene regulatory network. 
+        """
         self.networks_compilation[subnet_name] = subnet_obj
     
     def calc_scale_expression(self, raw_exp, TF_norm_factors):
+        """Convert the simulated gene expressions into transcription activity probability. 
+
+        Args:
+            raw_exp (float): the raw expression
+            TF_norm_factors (dict): dictionary holding the coefficient of logistic function 
+
+        Returns:
+            float: the transcription activity probability 
+        """
         TF_mid = TF_norm_factors['b']
         TF_scale = TF_norm_factors['m']
 
         scaled_exp = 1 / (1 + np.exp(-TF_scale * (raw_exp - TF_mid)))
+
+        # in the case where the activity probability is below 0 or 1. Should not happen though. 
         if scaled_exp < 0: 
             scaled_exp = 0.001
         if scaled_exp > 1: 
             scaled_exp = 1.001
         return scaled_exp 
 
-    def calc_production_rate(self, prev_exp, TG, network_model, norm_dict):
+    def calc_production_rate(self, TG, network_model, norm_dict):
+        """Calculate the production rate of the taret gene based on the activity of its upstream regulators. 
+
+        Args:
+            TG (str): The name of the target gene 
+            network_model (network_structure): A fitted network structure of inferred gene regulatory network. 
+            norm_dict (dict): A dictionary of TF activity percentages. 
+
+        Returns:
+            float: Simulated expression values of target gene. 
+        """
         TG_gene_obj = network_model.network_dict[TG]
         reg_coefficient = TG_gene_obj.regulation_coeff
         
@@ -64,6 +97,19 @@ class OneSC_simulator(object):
         return reg_coefficient * total_prob
             
     def simulate_exp(self, initial_exp_dict, initial_subnet, perturb_dict = dict(), decay_rate = 0.1, num_sim = 1000, t_interval = 0.01, noise_amp = 2, stochasticity = True, random_seed = 0):
+        """Simulate expression profiles across time steps. 
+
+        Args:
+            initial_exp_dict (dict): dictionary of initial state
+            initial_subnet (str): the name of the gene regulatory fitted network structure that the user want to use for simulation. 
+            perturb_dict (dict, optional): a dictionary with the key of gene name and value indicating the in silico perturbation. If the user want to perform overexpression, then set the value between 0 and 2. If the user want to perform knockdown, then set the value between 0 and -2. Defaults to dict().
+            decay_rate (float, optional): the rate of expression decay. Defaults to 0.1.
+            num_sim (int, optional): number of simulation steps. Defaults to 1000.
+            t_interval (float, optional): the size of the simulation step. Defaults to 0.01.
+            noise_amp (int, optional): the amplitude of noise. Defaults to 2.
+            stochasticity (bool, optional): whether to add stochasticity (noise) or not. Defaults to True.
+            random_seed (int, optional): random seed. Defaults to 0.
+        """
         prng = np.random.default_rng(random_seed)        
         time_series_col = list(range(0, num_sim))
         time_df = pd.DataFrame(data = None, index = initial_exp_dict.keys(), columns = time_series_col)
@@ -85,7 +131,7 @@ class OneSC_simulator(object):
                     norm_dict[TF] = scaled_exp 
 
                 for gene_name in network_model.keys():
-                    gene_production = self.calc_production_rate(prev_exp, gene_name, self.networks_compilation[initial_subnet], norm_dict)
+                    gene_production = self.calc_production_rate(gene_name, self.networks_compilation[initial_subnet], norm_dict)
                     gene_production = gene_production * decay_rate
 
                     if gene_name in perturb_dict.keys(): 
