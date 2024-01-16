@@ -13,9 +13,11 @@ Below is a walk-through tutorial on
 
 [Inference of GRN](#grn_inference) <br>
 
-[Simulation of Synthetic Cells](#simulateSynCells)
+[Simulation of Synthetic Cells](#simulateSynCells) <br>
 
-[Perform Perturbation Simulation](#perturbSynCells)
+[Visualization of Simulated Cells](#visualizeSimCells) <br>
+
+[Perform Perturbation Simulation](#perturbSynCells) <br>
 
 [Optional - Identification of dynamic TFs](#identifyDynTFs)
 
@@ -108,3 +110,42 @@ print(inferred_grn)
 #7    Irf8  Cebpe    -
 # ...
 ```
+### <a name="simulateSynCells">Simulation of Synthetic Cells</a>
+After inferring the gene regulatory network, we can perform simulations using the GRN as a backbone. First construct a OneSC simulator object using GRN. 
+```
+# load in the inferred GRNs 
+inferred_grn = pd.read_csv("OneSC_network.csv", sep = ',', index_col=0)
+MyNetwork = onesc.network_structure()
+MyNetwork.fit_grn(inferred_grn)
+MySimulator = onesc.OneSC_simulator()
+MySimulator.add_network_compilation('OneSC', MyNetwork)
+```
+Load in the state dict to get the Boolean profiles of the initial state 
+```
+# get the Boolean profiles of the initial state 
+state_dict = pickle.load(open('state_dict.pickle', 'rb'))
+init_state = state_dict['trajectory_0'].iloc[:, 0]
+# put them into a dictionary 
+init_exp_dict = dict()
+for gene in init_state.index: 
+    if init_state[gene] == 1:
+        init_exp_dict[gene] = 2 # in the fitted grn, 2 is considered as fully turned on 
+    else:
+        init_exp_dict[gene] = 0
+```
+Here is one way to run one single simulation across time step. To create a different simulation trajectory, just change the random seed. 
+```
+rnd_seed = 1 # change the random seed to get  
+temp_simulator.simulate_exp(init_exp_dict, 'OneSC', num_sim = 1800, t_interval = 0.1, noise_amp = 0.5, random_seed = rnd_seed)
+sim_exp = temp_simulator.sim_exp
+print(sim_exp) 
+
+#      0        1        2        3        4        5        6        7     \
+#Cebpa    2  2.02423  1.94787  1.76007  1.72846  1.76987  1.77564  1.72405   
+#Cebpe    0     0.02     0.02     0.02     0.02     0.02     0.02     0.02   
+#Fli1     0     0.02  0.03973  0.05803    0.079  0.10201  0.10683   0.1294   
+#Gata1    0     0.02     0.02     0.02     0.02     0.02     0.02     0.02   
+...
+```
+
+
