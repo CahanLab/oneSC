@@ -147,6 +147,9 @@ print(sim_exp)
 #Gata1    0     0.02     0.02     0.02     0.02     0.02     0.02     0.02   
 ...
 ```
-
+Alternatively, you can use the wrapper function to simulate the expression profiles in parallel. This function has been tested on MacOS (m1 chip) and Ubuntu, it may or may not work on Windows. 
+```
+onesc.simulate_parallel(temp_simulator, init_exp_dict, 'OneSC', n_cores = 10, output_dir = "sim_profiles", num_runs = 100, num_sim = 1800, t_interval = 0.1, noise_amp = 0.5)
+```
 
 
