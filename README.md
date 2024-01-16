@@ -13,7 +13,7 @@ Below is a walk-through tutorial on
 
 [Inference of GRN](#grn_inference) <br>
 
-[Simulation of Synthetic Cells](#simulateSynCells) <br>
+[Simulation of Synthetic Cells](#simulate_syncells) <br>
 
 [Visualization of Simulated Cells](#visualizeSimCells) <br>
 
@@ -110,7 +110,7 @@ print(inferred_grn)
 #7    Irf8  Cebpe    -
 # ...
 ```
-### <a name="simulateSynCells">Simulation of Synthetic Cells</a>
+### <a name="simulate_syncells">Simulation of Synthetic Cells</a>
 After inferring the gene regulatory network, we can perform simulations using the GRN as a backbone. First construct a OneSC simulator object using GRN. 
 ```
 # load in the inferred GRNs 
