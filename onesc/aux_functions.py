@@ -8,15 +8,35 @@ from scipy.stats import rankdata
 import scanpy as sc
 import multiprocessing as mp
 import os
+import warnings
 
-def simulate_parallel(OneSC_simulator, init_exp_dict, network_name, num_runs = 10, output_dir = "", num_sim = 1000, t_interval = 0.1, noise_amp = 0.1):
-    pool = mp.pool.ThreadPool(mp.cpu_count() - 1)
+
+def simulate_parallel(OneSC_simulator, init_exp_dict, network_name, n_cores = 2, output_dir = "", num_runs = 10, num_sim = 1000, t_interval = 0.1, noise_amp = 0.1):
+    """Running simulations using parallel. 
+
+    Args:
+        OneSC_simulator (onesc.OneSC_simulator): OneSC simulator object. 
+        init_exp_dict (dict): the dictionary with the initial conditions for each gene. 
+        network_name (str): the name of the network structure in the OneSC simulator that you want to run. 
+        n_cores (int, optional): number of cores for parallel computing. Defaults to 2.
+        output_dir (str, optional): output directory. Defaults to "".
+        num_runs (int, optional): number of simulations to run. Defaults to 10.
+        num_sim (int, optional): number of simulation steps per simulation. Defaults to 1000.
+        t_interval (float, optional): the size of the simulation step. Defaults to 0.1.
+        noise_amp (float, optional): noise amplitude. Defaults to 0.1.
+    """
+    if n_cores > mp.cpu_count(): 
+        warnings.warn("Maximum number of cores is " + str(mp.cpu_count()))
+        n_cores = mp.cpu_count()
+
+    pool = mp.pool.ThreadPool(n_cores)
     num_runs_list = list(range(0, num_runs)) 
     if output_dir[len(output_dir) - 1] != "/":
         if len(output_dir) > 0:
             output_dir = output_dir + "/"
     if os.path.isdir(output_dir) == False:
-        raise Exception("Please input a valid output directory")
+        os.makedirs(output_dir)
+        warnings.warn("Output directory did not exist. Creating output directory.")
     def run_parallel(i):
         np.random.seed(i)
         OneSC_simulator.simulate_exp(init_exp_dict, network_name, num_sim = num_sim, t_interval = t_interval, noise_amp = noise_amp, random_seed = i)
