@@ -11,7 +11,7 @@ import os
 import warnings
 
 
-def simulate_parallel(OneSC_simulator, init_exp_dict, network_name, n_cores = 2, output_dir = "", num_runs = 10, num_sim = 1000, t_interval = 0.1, noise_amp = 0.1):
+def simulate_parallel(OneSC_simulator, init_exp_dict, network_name, perturb_dict = {}, n_cores = 2, output_dir = "", num_runs = 10, num_sim = 1000, t_interval = 0.1, noise_amp = 0.1):
     """Running simulations using parallel. 
 
     Args:
@@ -39,7 +39,7 @@ def simulate_parallel(OneSC_simulator, init_exp_dict, network_name, n_cores = 2,
         warnings.warn("Output directory did not exist. Creating output directory.")
     def run_parallel(i):
         np.random.seed(i)
-        OneSC_simulator.simulate_exp(init_exp_dict, network_name, num_sim = num_sim, t_interval = t_interval, noise_amp = noise_amp, random_seed = i)
+        OneSC_simulator.simulate_exp(init_exp_dict, network_name, perturb_dict, num_sim = num_sim, t_interval = t_interval, noise_amp = noise_amp, random_seed = i)
         sim_exp = OneSC_simulator.sim_exp.copy()
         sim_exp.to_csv(os.path.join(output_dir, str(i) + "_simulated_exp.csv"))
     pool.map(run_parallel, num_runs_list) 

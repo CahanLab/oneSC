@@ -17,7 +17,7 @@ Below is a walk-through tutorial on
 
 [Visualization of Simulated Cells](#visualize_simcells) <br>
 
-[Perform Perturbation Simulation](#perturbSynCells) <br>
+[Perform Perturbation Simulation](#perturb_syncells) <br>
 
 [Optional - Identification of dynamic TFs](#identifyDynTFs)
 
@@ -119,7 +119,7 @@ inferred_grn = pd.read_csv("OneSC_network.csv", sep = ',', index_col=0)
 MyNetwork = onesc.network_structure()
 MyNetwork.fit_grn(inferred_grn)
 MySimulator = onesc.OneSC_simulator()
-MySimulator.add_network_compilation('OneSC', MyNetwork)
+MySimulator.add_network_compilation('Myeloid_network', MyNetwork)
 ```
 Load in the state dict to get the Boolean profiles of the initial state 
 ```
@@ -137,7 +137,7 @@ for gene in init_state.index:
 Here is one way to run one single simulation across time step. To create a different simulation trajectory, just change the random seed. 
 ```
 rnd_seed = 1 # change the random seed to get  
-temp_simulator.simulate_exp(init_exp_dict, 'OneSC', num_sim = 1800, t_interval = 0.1, noise_amp = 0.5, random_seed = rnd_seed)
+temp_simulator.simulate_exp(init_exp_dict, 'Myeloid_network', num_sim = 1800, t_interval = 0.1, noise_amp = 0.5, random_seed = rnd_seed)
 sim_exp = temp_simulator.sim_exp
 print(sim_exp) 
 
@@ -152,7 +152,7 @@ Alternatively, you can use the wrapper function to simulate the expression profi
 
 The code down below will create a output directory called *sim_profiles* where the simulations are saved. 
 ```
-onesc.simulate_parallel(temp_simulator, init_exp_dict, 'OneSC', n_cores = 10, output_dir = "sim_profiles", num_runs = 100, num_sim = 1800, t_interval = 0.1, noise_amp = 0.5)
+onesc.simulate_parallel(temp_simulator, init_exp_dict, 'Myeloid_network', n_cores = 10, output_dir = "sim_profiles", num_runs = 100, num_sim = 1800, t_interval = 0.1, noise_amp = 0.5)
 ```
 
 ### <a name="visualize_simcells">Visualization of Simulated Cells</a>
@@ -164,7 +164,7 @@ sim_files = os.listdir(save_folder_path)
 print(sim_files)
 # ['89_simulated_exp.csv', '59_simulated_exp.csv', '17_simulated_exp.csv', '71_simulated_exp.csv', '23_simulated_exp.csv', '45_simulated_exp.csv', '95_simulated_exp.csv', '12_simulated_exp.csv', ...]
 ```
-Then we can load in all simulation results, sample them (every 50 simulation step) and the concanetate them into a giant dataframe. 
+Then we can load in all simulation results, sample them (every 50 simulation step to reduce computation) and the concanetate them into a giant dataframe. 
 ```
 big_sim_df = pd.DataFrame()
 for sim_file in sim_files: 
@@ -185,3 +185,45 @@ sns.scatterplot(x='UMAP_1', y='UMAP_2', hue='sim_time', data=UMAP_coord)
 ```
 <img src="img/wt_UMAP.png" width="400">
 
+### <a name="perturb_syncells">Perform Perturbation Simulation</a>
+One of the main functions of OneSC is the capability of running in-silico perturbations. Here we are going to demonstrate how you can perform Cepbe in-silico knockout.
+
+We first construct a perturb dictionary indicating which gene or genes we want to pertrub and how much do we perturb at each simulation step. The default maximum expression value is at 2 and the default minimum expression value is at 0. Therefore ff we want to perform in-silico overexpression, we would use values > 0 (i.e 1) and if we want to perform in-silico knockout, we would use values < 0 (i.e -1). 
+
+```
+perturb_dict = dict()
+# manually subtract -1 on every simulation step to simulate knockout
+perturb_dict['Cepbe'] = -1 
+```
+We would then pass the perturb dictionary as a parameter in *onesc.simulate_exp* function. Here is how we do it to run one single simulation.  
+```
+rnd_seed = 1 # set the random seed to be reproducible 
+temp_simulator.simulate_exp(init_exp_dict, 'OneSC', perturb_dict, num_sim = 1800, t_interval = 0.1, noise_amp = 0.5, random_seed = rnd_seed)
+sim_exp = temp_simulator.sim_exp.copy()
+```
+We can also pass the perturb dictionary as a parameter in *onesc.simulate_parallel* function to simulate in-silico perturbations in parallel. 
+```
+onesc.simulate_parallel(temp_simulator, init_exp_dict, 'OneSC', perturb_dict = perturb_dict, n_cores = 10, output_dir = "sim_profiles_CepbeKO", num_runs = 100, num_sim = 1800, t_interval = 0.1, noise_amp = 0.5)
+```
+Lastly, you can visualize the results in UMAP 
+```
+save_folder_path = 'sim_profiles_CepbeKO'
+sim_files = os.listdir(save_folder_path)
+print(sim_files)
+
+big_sim_df = pd.DataFrame()
+for sim_file in sim_files: 
+    experiment_title = sim_file.replace("_exp.csv", "")
+    temp_sim = pd.read_csv(os.path.join(save_folder_path, sim_file), index_col = 0)
+    temp_sim = temp_sim[temp_sim.columns[::50]] # probably have to do it every 10 cells 
+    temp_sim.columns = experiment_title + "-" + temp_sim.columns
+    big_sim_df = pd.concat([big_sim_df, temp_sim], axis = 1)
+
+# embed the simulated cells into UMAP
+train_obj = onesc.UMAP_embedding_train(big_sim_df)
+UMAP_coord = onesc.UMAP_embedding_apply(train_obj, big_sim_df)
+# add the simulation time step into the UMAP 
+UMAP_coord['sim_time'] = [int(x.split("-")[1]) for x in list(UMAP_coord.index)]
+sns.scatterplot(x='UMAP_1', y='UMAP_2', hue='sim_time', data=UMAP_coord)
+```
+<img src="img/cebpe_ko_UMAP.png" width="400">
