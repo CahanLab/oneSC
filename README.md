@@ -19,7 +19,7 @@ Below is a walk-through tutorial on
 
 [Perform Perturbation Simulation](#perturb_syncells) <br>
 
-[Optional - Identification of dynamic TFs](#identifyDynTFs)
+[Optional - Identification of dynamic TFs](#identify_dyntfs)
 
 ### <a name="installation">Installation</a>
 
@@ -227,3 +227,5 @@ UMAP_coord['sim_time'] = [int(x.split("-")[1]) for x in list(UMAP_coord.index)]
 sns.scatterplot(x='UMAP_1', y='UMAP_2', hue='sim_time', data=UMAP_coord)
 ```
 <img src="img/cebpe_ko_UMAP.png" width="400">
+
+### <a name="identify_dyntfs">Optional - Identification of dynamic TFs</a>
