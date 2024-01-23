@@ -323,7 +323,7 @@ def curate_training_data(state_dict, transition_dict, trajectory_time_change_dic
     training_dict['weight_dict'] = define_weight(state_dict)
     return training_dict
 
-def GA_fit_single_gene(training_dict, target_gene, corr_matrix, weight_dict = dict(), ideal_edges = 2, num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True):
+def GA_fit_single_gene(training_dict, target_gene, corr_matrix, weight_dict = dict(), ideal_edges = 2, num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True, mutation_percent_genes = 25, GA_seed = 2):
     """Identify the regulatory interactions for a gene that minimizes the discrepancy between gene states labels and simulated gene states via regulatory interactions for one single gene. 
 
     Args:
@@ -337,7 +337,8 @@ def GA_fit_single_gene(training_dict, target_gene, corr_matrix, weight_dict = di
         num_parents_mating (int, optional): Number of parents for genetic algorithm. Defaults to 4.
         sol_per_pop (int, optional): Number of solutions to keep per generation for genetic algorithm. Defaults to 10.
         reduce_auto_reg (bool, optional): If True, remove auto activation is not needed for states satisfaction. Defaults to True.
-
+        mutation_percent_genes (float, optional): The mutation percentage. Defaults to 25. 
+        GA_seed (int, optional): The seed for genetic algorithm. Defaults to 2. 
     Returns:
         list: A pandas dataframe object containing the regulatory edges for a gene and the fitness score. 
     """
@@ -398,8 +399,8 @@ def GA_fit_single_gene(training_dict, target_gene, corr_matrix, weight_dict = di
         prior_edge_penalty = 2 * additional_edge_reward
 
         # various rewards and penalties 
-        correct_reward = 1000000 * corr_matrix.shape[0]
-        edge_limit_rewards = 1000 * corr_matrix.shape[0]
+        correct_reward = 1e4 * corr_matrix.shape[0]
+        edge_limit_rewards = 1e3 * corr_matrix.shape[0]
         edge_limit_penalty = edge_limit_rewards / 2
 
         for i in range(0, len(training_data.columns)):
@@ -483,13 +484,12 @@ def GA_fit_single_gene(training_dict, target_gene, corr_matrix, weight_dict = di
     crossover_type = "uniform"
     
     mutation_type = "random"
-    mutation_percent_genes = 10
 
     # let me double check this 
-    perfect_fitness = training_data.shape[1] * 1000000 * corr_matrix.shape[0] # remove the weight_dict entry
+    perfect_fitness = training_data.shape[1] * 1e4 * corr_matrix.shape[0] # remove the weight_dict entry
 
     # generate an initial population pool 
-    prng = np.random.default_rng(2023)
+    prng = np.random.default_rng(1)
     init_pop_pool = np.random.choice([0, -1, 1], size=(sol_per_pop, num_genes))
 
     prev_1_fitness = 0 
@@ -511,7 +511,7 @@ def GA_fit_single_gene(training_dict, target_gene, corr_matrix, weight_dict = di
             mutation_percent_genes=mutation_percent_genes, 
             suppress_warnings = True,
             gene_space = [-1, 0, 1], 
-            random_seed = 2)
+            random_seed = GA_seed)
         ga_instance_max.run()
         solution, solution_fitness, solution_idx = ga_instance_max.best_solution()
         
@@ -546,7 +546,7 @@ def GA_fit_single_gene(training_dict, target_gene, corr_matrix, weight_dict = di
         
     return [new_edges_df, perfect_fitness_bool]
 
-def create_network(training_dict, corr_matrix, ideal_edges = 2, num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True, mutation_percent_genes = 20): 
+def create_network(training_dict, corr_matrix, ideal_edges = 2, num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True, mutation_percent_genes = 20, GA_seed = 2): 
     """Curate a functional Boolean network using genetic algorithm that minimizes the discrepancy between gene states labels and simulated gene states via regulatory interactions. 
 
     Args:
@@ -560,7 +560,6 @@ def create_network(training_dict, corr_matrix, ideal_edges = 2, num_generations 
         reduce_auto_reg (bool, optional): If True, remove auto activation is not needed for states satisfaction. Defaults to True.
         mutation_percent_genes (float, optional): The mutation percentage. Defaults to 25. 
         GA_seed (int, optional): The seed for genetic algorithm. Defaults to 2. 
-        init_pop_seed (int, optional): The seed for generating initial pool of solutions. Defaults to 2023. 
     Returns:
         pandas.DataFrame: The reconstructed network. 
     """
@@ -624,8 +623,8 @@ def create_network(training_dict, corr_matrix, ideal_edges = 2, num_generations 
             prior_edge_penalty = 2 * additional_edge_reward
 
             # various rewards and penalties 
-            correct_reward = 1000000 * corr_matrix.shape[0]
-            edge_limit_rewards = 1000 * corr_matrix.shape[0]
+            correct_reward = 1e4 * corr_matrix.shape[0]
+            edge_limit_rewards = 1e3 * corr_matrix.shape[0]
             edge_limit_penalty = edge_limit_rewards / 2
 
             for i in range(0, len(training_data.columns)):
@@ -714,11 +713,10 @@ def create_network(training_dict, corr_matrix, ideal_edges = 2, num_generations 
         mutation_type = "random"
 
         # let me double check this 
-        perfect_fitness = training_data.shape[1] * 1000000 * corr_matrix.shape[0] # remove the weight_dict entry
+        perfect_fitness = training_data.shape[1] * 1e4 * corr_matrix.shape[0] # remove the weight_dict entry
 
         # generate an initial population pool 
-        init_pop_seed = 2023
-        GA_seed = 2
+        init_pop_seed = 1
         prng = np.random.default_rng(init_pop_seed)
         init_pop_pool = prng.choice([0, -1, 1], size=(sol_per_pop, num_genes))
 
