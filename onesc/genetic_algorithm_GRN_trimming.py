@@ -1,6 +1,9 @@
 import numpy as np 
 import pandas as pd
 import pygad
+import itertools
+from joblib import Parallel, delayed, cpu_count
+import warnings 
 
 def define_states(exp_tab, samp_tab, trajectory_cluster, vector_thresh, cluster_col = 'cluster_id', percent_exp = 0.3):
     """Define the cell state boolean profiles for each of the trajectory. 
@@ -769,11 +772,88 @@ def create_network(training_dict, corr_matrix, ideal_edges = 2, num_generations 
             new_edges_df = pd.concat([new_edges_df, temp_edge])
 
         total_network = pd.concat([total_network, new_edges_df])
+        '''
         if perfect_fitness_bool == False: 
             print(target_gene + " does not fit perfectly")
         else:
             print(target_gene + " finished fitting")
+        '''
     return total_network
+
+def create_network_ensemble(training_dict, corr_matrix, n_cores = 16, run_parallel = True, ideal_edges = 2, num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True, mutation_percent_genes = 20, GA_seed_list = [1, 2, 3, 4], init_pop_seed_list = [20, 21, 23, 24]):
+    """Create an ensemble of inferred networks using different genetic algorithm and initial population seeds. 
+
+    Args:
+        training_dict (dict): The output from onesc.curate_training_data. 
+        corr_matrix (pandas.DataFrame): The Pearson correlation matrix. Could use any other distance related metrics as well as long as they are between 0 and 1. This metric is used to decide which transcription regulators to choose if there are multiple transcription regulators with the same expression states across cell states. 
+        n_cores (int, optional): number of cores to run the network inference in parallel. Defaults to 16.
+        run_parallel (bool, optional): whether to run network inference in parallel. Defaults to True.
+        ideal_edges (int, optional): The ideal number of incoming edges per gene. Defaults to 2.
+        num_generations (int, optional): Number of generations for genetic algorithm per gene per iteration. Defaults to 1000.
+        max_iter (int, optional): Maximum number of iterations for genetic algorithm. If the fitness has not change in 3 iterations then stop early. Defaults to 10.
+        num_parents_mating (int, optional): Number of parents for genetic algorithm. Defaults to 4.
+        sol_per_pop (int, optional): Number of solutions to keep per generation for genetic algorithm. Defaults to 10.
+        reduce_auto_reg (bool, optional): If True, remove auto activation is not needed for states satisfaction. Defaults to True.
+        mutation_percent_genes (float, optional): The mutation percentage. Defaults to 25. 
+        GA_seed_list (list, optional): a list of seeds for genetic algorithm. Defaults to [1, 2, 3, 4].
+        init_pop_seed_list (list, optional): a list of seeds for generating initial populations. Defaults to [20, 21, 23, 24].
+
+    Returns:
+        _type_: _description_
+    """
+    seeds_combo = list(itertools.product(GA_seed_list, init_pop_seed_list))
+
+    def mass_train(temp_GA_seed, temp_init_seed):
+        inferred_network = create_network(training_dict, 
+                                          corr_matrix, 
+                                          ideal_edges, 
+                                          num_generations, 
+                                          max_iter, 
+                                          num_parents_mating, 
+                                          sol_per_pop, 
+                                          reduce_auto_reg, 
+                                          mutation_percent_genes,
+                                          GA_seed = temp_GA_seed, 
+                                          init_pop_seed = temp_init_seed)
+        return inferred_network
+
+    if n_cores > cpu_count(): 
+        warnings.warn("Maximum number of cores is " + str(cpu_count()))
+        n_cores = cpu_count()
+    if run_parallel == True: 
+        parallel_results = Parallel(n_jobs=n_cores)(
+            delayed(mass_train)(*args) for args in seeds_combo
+        )
+    else: 
+        parallel_results = list()
+        for temp_GA_seed, temp_init_seed in seeds_combo:
+            parallel_results.append(mass_train(temp_GA_seed, temp_init_seed))
+
+    def get_majority_network(parallel_results):
+        max_network = pd.DataFrame()
+        for temp_gene in corr_matrix.index: 
+            stats_df = pd.DataFrame()
+            temp_subnet_dict = dict()
+            for i in range(0, len(parallel_results)):
+                temp_subnet = parallel_results[i].loc[parallel_results[i]['TG'] == temp_gene, :].copy()
+                temp_subnet = temp_subnet.sort_values(by='TF', ascending=True)
+                if temp_subnet.to_string() not in stats_df.index:
+                    stats_dict = {'occurrences': [1], 'edge_diff': np.abs(temp_subnet.shape[0] - ideal_edges)}
+                    row_df = pd.DataFrame(stats_dict)
+                    row_df.index = [temp_subnet.to_string()]
+                    stats_df = pd.concat([stats_df, row_df])
+                    temp_subnet_dict[temp_subnet.to_string()] = temp_subnet
+                else: 
+                    stats_df.loc[temp_subnet.to_string(), 'occurrences'] = stats_df.loc[temp_subnet.to_string(), 'occurrences'] + 1
+            filtered_stats_df = stats_df.loc[stats_df['occurrences'] == np.max(stats_df['occurrences']), :].copy()
+            filtered_stats_df = filtered_stats_df.sort_values('edge_diff', ascending = True)
+
+            max_network = pd.concat([max_network, temp_subnet_dict[filtered_stats_df.index[0]]])
+        return max_network
+
+    majority_network = get_majority_network(parallel_results)
+
+    return [majority_network, parallel_results]
 
 def calc_corr(train_exp):
     return train_exp.T.corr()
