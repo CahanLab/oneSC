@@ -546,7 +546,7 @@ def GA_fit_single_gene(training_dict, target_gene, corr_matrix, weight_dict = di
         
     return [new_edges_df, perfect_fitness_bool]
 
-def create_network(training_dict, corr_matrix, ideal_edges = 2, num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True, mutation_percent_genes = 20, GA_seed = 2): 
+def create_network(training_dict, corr_matrix, ideal_edges = 2, num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True, mutation_percent_genes = 20, GA_seed = 2, init_pop_seed = 2023): 
     """Curate a functional Boolean network using genetic algorithm that minimizes the discrepancy between gene states labels and simulated gene states via regulatory interactions. 
 
     Args:
@@ -560,6 +560,7 @@ def create_network(training_dict, corr_matrix, ideal_edges = 2, num_generations 
         reduce_auto_reg (bool, optional): If True, remove auto activation is not needed for states satisfaction. Defaults to True.
         mutation_percent_genes (float, optional): The mutation percentage. Defaults to 25. 
         GA_seed (int, optional): The seed for genetic algorithm. Defaults to 2. 
+        init_pop_seed (int, optional): The seed for generating the initial population for genetic algorithm. Defaults to 2023. 
     Returns:
         pandas.DataFrame: The reconstructed network. 
     """
@@ -716,7 +717,6 @@ def create_network(training_dict, corr_matrix, ideal_edges = 2, num_generations 
         perfect_fitness = training_data.shape[1] * 1e4 * corr_matrix.shape[0] # remove the weight_dict entry
 
         # generate an initial population pool 
-        init_pop_seed = 1
         prng = np.random.default_rng(init_pop_seed)
         init_pop_pool = prng.choice([0, -1, 1], size=(sol_per_pop, num_genes))
 
