@@ -323,14 +323,13 @@ def curate_training_data(state_dict, transition_dict, trajectory_time_change_dic
     training_dict['weight_dict'] = define_weight(state_dict)
     return training_dict
 
-def GA_fit_single_gene(training_dict, target_gene, corr_matrix, weight_dict = dict(), ideal_edges = 2, num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True, mutation_percent_genes = 25, GA_seed = 2):
+def GA_fit_single_gene(training_dict, target_gene, corr_matrix, ideal_edges = 2, num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True, mutation_percent_genes = 25, GA_seed = 2, init_pop_seed = 2023):
     """Identify the regulatory interactions for a gene that minimizes the discrepancy between gene states labels and simulated gene states via regulatory interactions for one single gene. 
 
     Args:
         training_dict (dict): The output from onesc.curate_training_data. 
         target_gene (str): The target gene. 
         corr_matrix (pandas.DataFrame): The correlation matrix 
-        weight_dict (dict): The weight matrix 
         ideal_edges (int, optional): Ideal number of incoming edges per gene. Defaults to 2.
         num_generations (int, optional): Number of generations for genetic algorithm per gene per iteration. Defaults to 1000.
         max_iter (int, optional): Maximum number of iterations for genetic algorithm. If the fitness has not change in 3 iterations then stop early. Defaults to 10.
@@ -339,9 +338,11 @@ def GA_fit_single_gene(training_dict, target_gene, corr_matrix, weight_dict = di
         reduce_auto_reg (bool, optional): If True, remove auto activation is not needed for states satisfaction. Defaults to True.
         mutation_percent_genes (float, optional): The mutation percentage. Defaults to 25. 
         GA_seed (int, optional): The seed for genetic algorithm. Defaults to 2. 
+        init_pop_seed (int, optional): The seed for generating the initial population for genetic algorithm. Defaults to 2023. 
     Returns:
         list: A pandas dataframe object containing the regulatory edges for a gene and the fitness score. 
     """
+    weight_dict = training_dict['weight_dict']
     unlikely_activators = training_dict[target_gene]['unlikely_activators']
     unlikely_repressors = training_dict[target_gene]['unlikely_repressors']
 
@@ -417,7 +418,7 @@ def GA_fit_single_gene(training_dict, target_gene, corr_matrix, weight_dict = di
 
             correctness_sum = correctness_sum + temp_score
         
-        fitness_score = correctness_sum + (np.sum(np.array(solution) != 0) * additional_edge_reward)  # if a gene can be either activator or inhibitor, choose inhibitor
+        fitness_score = correctness_sum + (np.sum(np.array(solution) != 0) * additional_edge_reward)  
         
         # if the number of edges stay below ideal edge, then we add in the reward 
         if np.sum(np.abs(solution)) > ideal_edges:
@@ -469,7 +470,10 @@ def GA_fit_single_gene(training_dict, target_gene, corr_matrix, weight_dict = di
                 if solution[temp_index] == 0:
                     continue
                 else:
-                    fitness_score = fitness_score + weight_dict[training_data.index[temp_index]]
+                    if weight_dict[training_data.index[temp_index]] > (weight_dict[target_gene] + 1):
+                        fitness_score = fitness_score - 1
+                    else:
+                        fitness_score = fitness_score + weight_dict[training_data.index[temp_index]] # this works the best 
 
         if np.sum(np.abs(solution)) == 0: # if there are no regulation on the target gene, not even self regulation, then it's not acceptable
             fitness_score = fitness_score - (3 * correct_reward)
@@ -489,7 +493,7 @@ def GA_fit_single_gene(training_dict, target_gene, corr_matrix, weight_dict = di
     perfect_fitness = training_data.shape[1] * 1e4 * corr_matrix.shape[0] # remove the weight_dict entry
 
     # generate an initial population pool 
-    prng = np.random.default_rng(1)
+    prng = np.random.default_rng(init_pop_seed)
     init_pop_pool = np.random.choice([0, -1, 1], size=(sol_per_pop, num_genes))
 
     prev_1_fitness = 0 
@@ -530,10 +534,6 @@ def GA_fit_single_gene(training_dict, target_gene, corr_matrix, weight_dict = di
 
     new_edges_df = pd.DataFrame()
     
-    print(solution)
-    print(solution_fitness)
-    print(perfect_fitness)
-
     for i in range(0, len(solution)):
         if solution[i] == 0:
             continue
@@ -544,7 +544,7 @@ def GA_fit_single_gene(training_dict, target_gene, corr_matrix, weight_dict = di
         temp_edge = pd.DataFrame(data = [[training_data.index[i], target_gene, reg_type]], columns = ['TF', 'TG', "Type"])
         new_edges_df = pd.concat([new_edges_df, temp_edge])
         
-    return [new_edges_df, perfect_fitness_bool]
+    return new_edges_df
 
 def create_network(training_dict, corr_matrix, ideal_edges = 2, num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True, mutation_percent_genes = 20, GA_seed = 2, init_pop_seed = 2023): 
     """Curate a functional Boolean network using genetic algorithm that minimizes the discrepancy between gene states labels and simulated gene states via regulatory interactions. 
