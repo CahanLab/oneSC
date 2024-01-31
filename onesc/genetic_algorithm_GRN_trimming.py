@@ -780,7 +780,7 @@ def create_network(training_dict, corr_matrix, ideal_edges = 2, num_generations 
         '''
     return total_network
 
-def create_network_ensemble(training_dict, corr_matrix, n_cores = 16, run_parallel = True, ideal_edges = 2, num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True, mutation_percent_genes = 20, GA_seed_list = [1, 2, 3, 4], init_pop_seed_list = [20, 21, 23, 24]):
+def create_network_ensemble(training_dict, corr_matrix, n_cores = 16, run_parallel = True, ideal_edges = 2, num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True, mutation_percent_genes = 20, GA_seed_list = [1, 2, 3, 4], init_pop_seed_list = [21, 22, 23, 24]):
     """Create an ensemble of inferred networks using different genetic algorithm and initial population seeds. 
 
     Args:
