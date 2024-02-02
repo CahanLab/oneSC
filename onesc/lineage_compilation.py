@@ -197,6 +197,8 @@ def construct_cluster_network(train_exp, sampTab, initial_clusters, terminal_clu
     distance_df['norm_dist'] = (distance_df['distance'] - np.min(distance_df['distance'])) / (np.max(distance_df['distance']) - np.min(distance_df['distance']))
     distance_df['starting_pt'] = None
     mean_pt.index = mean_pt['cluster']
+
+    # calculate the combined score 
     for cluster in np.unique(distance_df['starting']):
         distance_df.loc[distance_df['starting'] == cluster, 'starting_pt'] = mean_pt.loc[cluster, 'pt']
     distance_df['combined_score'] = distance_df['norm_dist'] + (distance_df['starting_pt'] / 2)
