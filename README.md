@@ -92,7 +92,7 @@ corr_mat = onesc.calc_corr(train_exp)
 
 # infer the gene regulatory network
 ideal_edge_num = round(0.4 * corr_mat.shape[1])
-inferred_grn = onesc.create_network_ensemble(training_data, 
+grn_ensemble = onesc.create_network_ensemble(training_data, 
                                             corr_mat, 
                                             ideal_edges = ideal_edge_num, 
                                             num_generations = 300, 
@@ -100,6 +100,7 @@ inferred_grn = onesc.create_network_ensemble(training_data,
                                             num_parents_mating = 4, 
                                             sol_per_pop = 30, 
                                             reduce_auto_reg = True)
+inferred_grn = grn_ensemble[0]
 inferred_grn.to_csv("OneSC_network.csv")
 
 # save the dictionary of Boolean states into a pickle object. 
