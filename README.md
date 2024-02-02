@@ -12,7 +12,7 @@ Below is a walk-through tutorial on
 [Installation](#installation) <br>
 ```
 # should be able to install onesc and the necessary dependencies. 
-pip install git+https://github.com/CahanLab/oneSC.git --use-deprecated=legacy-resolver
+pip install git+https://github.com/CahanLab/oneSC.git
 ```
 [Inference of GRN](#grn_inference) <br>
 
