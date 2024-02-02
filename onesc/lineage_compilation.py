@@ -188,7 +188,7 @@ def construct_cluster_network(train_exp, sampTab, initial_clusters, terminal_clu
     mean_pt = mean_pt.sort_values("pt")
     mean_exp = mean_exp.loc[:, mean_pt['cluster']]
 
-    # calculate the euclidean distance between distance 
+    # calculate the euclidean distance between clusters 
     distance_df = pd.DataFrame() 
     for i in range(mean_exp.shape[1]):
         for j in range(i + 1, mean_exp.shape[1]):
