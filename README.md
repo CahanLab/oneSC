@@ -10,10 +10,7 @@ Below is a walk-through tutorial on
 ### Table of contents
 
 [Installation](#installation) <br>
-```
-# should be able to install onesc and the necessary dependencies. 
-pip install git+https://github.com/CahanLab/oneSC.git
-```
+
 [Inference of GRN](#grn_inference) <br>
 
 [Simulation of Synthetic Cells](#simulate_syncells) <br>
@@ -25,7 +22,10 @@ pip install git+https://github.com/CahanLab/oneSC.git
 [Optional - Identification of dynamic TFs](#identify_dyntfs)
 
 ### <a name="installation">Installation</a>
-
+```
+# should be able to install onesc and the necessary dependencies. 
+pip install git+https://github.com/CahanLab/oneSC.git
+```
 ### <a name="grn_inference">Inference of GRN</a>
 In the tutorial, we are going to use the mouse myeloid single-cell data from [Paul et al, 2015](https://www.cell.com/cell/fulltext/S0092-8674(15)01493-2?_returnURL=https%3A%2F%2Flinkinghub.elsevier.com%2Fretrieve%2Fpii%2FS0092867415014932%3Fshowall%3Dtrue). You can download the [expression profiles of core transcription factors](https://cnobjects.s3.amazonaws.com/OneSC/Pual_2015/train_exp.csv) and the [sample table](https://cnobjects.s3.amazonaws.com/OneSC/Pual_2015/samp_tab.csv) with pusedotime and cluster information. 
 
