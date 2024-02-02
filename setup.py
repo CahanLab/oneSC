@@ -19,6 +19,7 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     install_requires=[
+        'click',
         'pygad>=3.1.0',
         'pygam>=0.8.0',
         'numpy>=1.21.5', 
@@ -29,5 +30,5 @@ setuptools.setup(
         'joblib>=1.1.0',
         'networkx>=2.8.8'
     ],
-    python_requires='>=3.9',
+    python_requires='>=3.9.12',
 )

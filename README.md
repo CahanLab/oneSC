@@ -10,7 +10,10 @@ Below is a walk-through tutorial on
 ### Table of contents
 
 [Installation](#installation) <br>
-
+```
+# should be able to install onesc and the necessary dependencies. 
+pip install git+https://github.com/CahanLab/oneSC.git --use-deprecated=legacy-resolver
+```
 [Inference of GRN](#grn_inference) <br>
 
 [Simulation of Synthetic Cells](#simulate_syncells) <br>
