@@ -30,5 +30,5 @@ setuptools.setup(
         'joblib>=1.1.0',
         'networkx>=2.8.8'
     ],
-    python_requires='>=3.9.12',
+    python_requires='>=3.9',
 )

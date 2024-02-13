@@ -22,10 +22,10 @@ Below is a walk-through tutorial on
 [Optional - Identification of dynamic TFs](#identify_dyntfs)
 
 ### <a name="installation">Installation</a>
-We recommend creating a new conda environment and install OneSC. Open terminal and type the following code. 
+We recommend creating a new conda environment (with python version >= 3.9) and install OneSC. Open terminal and type the following code. 
 ```
 # type this into the terminal 
-conda create -n OneSC_run 
+conda create -n OneSC_run python=3.9
 conda activate OneSC_run 
 ```
 In the conda environment, type the following code. 
