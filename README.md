@@ -67,29 +67,40 @@ nx.draw(clusters_G, with_labels = True)
 ```
 <img src="img/cluster_cluster_graph.png" width="400">
 
-Run the GRN inference step and save the GRN. 
+Identify the trajectories in the single-cell data using the cell state transition graph. 
 ```
 # extract inidividual trajectories found in the data 
 lineage_cluster = onesc.extract_trajectory(clusters_G,initial_clusters, end_clusters)
-
+```
+Identify the expression thresholds to binarize the expressions into activity status. 
+```
 # find the boolean threshold for each gene 
 vector_thresh = onesc.find_threshold_vector(train_exp, samp_tab, cluster_col = "cell_types", cutoff_percentage=0.4)
-
+```
+Identify the pseudtime at which genes change activity status across different trajectories. 
+```
 # identify the finner time steps at which genes change along individual trajectory 
 lineage_time_change_dict = onesc.find_gene_change_trajectory(train_exp, samp_tab, lineage_cluster, cluster_col, pt_col, vector_thresh, pseudoTime_bin=0.01) 
-
+```
+Generate the states activity profiles and the transition profiles for each cell type cluster. 
+```
 # define boolean states profiles for each cell cluster 
 state_dict = onesc.define_states(train_exp, samp_tab, lineage_cluster, vector_thresh, cluster_col, percent_exp = 0.3)
 
 # define transition profiles for each cell clusters
 transition_dict = onesc.define_transition(state_dict)
+```
 
-# curate the training data for inference of GRN for each gene 
+Curate the training data for GRN inference. In short, it curates a activity status label for each target gene across different cell type state and regulators activity profiles for genetic algorithm optimization. 
+```
+# curate the training data for GRN inference for each gene 
 training_data = onesc.curate_training_data(state_dict, transition_dict, lineage_time_change_dict, samp_tab, cluster_id = cluster_col, pt_id = pt_col,act_tolerance = 0.04)
 
 # calculate the pearson correlation between genes. This adds more information during the inference step. 
 corr_mat = onesc.calc_corr(train_exp)
-
+```
+Run the GRN inference step and save the GRN. To increase the number of networks inferred in the networks, please add more items to the *GA_seed_list* or *init_pop_seed*. 
+```
 # infer the gene regulatory network
 ideal_edge_num = round(0.4 * corr_mat.shape[1])
 grn_ensemble = onesc.create_network_ensemble(training_data, 
@@ -99,7 +110,10 @@ grn_ensemble = onesc.create_network_ensemble(training_data,
                                             max_iter = 30, 
                                             num_parents_mating = 4, 
                                             sol_per_pop = 30, 
-                                            reduce_auto_reg = True)
+                                            reduce_auto_reg = True, 
+                                            GA_seed_list = [1, 2, 3, 4, 5], 
+                                            init_pop_seed_list = [21, 22, 23, 24, 25]) # this would generate 25 networks (one for each GA, init seed combo)
+
 inferred_grn = grn_ensemble[0]
 inferred_grn.to_csv("OneSC_network.csv")
 
@@ -107,7 +121,7 @@ inferred_grn.to_csv("OneSC_network.csv")
 # we will be needing the Boolean profiles of initial state for running simulations 
 pickle.dump(state_dict, open("state_dict.pickle", "wb"))
 ```
-You can print the inferred GRN out. It should look like something below. 
+You can print the inferred GRN out. It should look similar to something below. 
 ```
 print(inferred_grn)
 
