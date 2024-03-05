@@ -702,7 +702,7 @@ def create_network(training_dict, corr_matrix, ideal_edges = 2, num_generations 
                             fitness_score = fitness_score - 1
                         else:
                             fitness_score = fitness_score + weight_dict[training_data.index[temp_index]]  
-            if np.sum(np.abs(solution)) == 0: # if there are no regulation on the target gene, not even self regulation, then it's not acceptable
+            if np.sum(np.abs(solution)) == 0: # prevent cases of a target gene without any regulations including self-regulations. 
                 fitness_score = fitness_score - (3 * correct_reward)
             return fitness_score
 
