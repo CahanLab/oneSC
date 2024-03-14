@@ -326,6 +326,23 @@ def curate_training_data(state_dict, transition_dict, trajectory_time_change_dic
     training_dict['weight_dict'] = define_weight(state_dict)
     return training_dict
 
+def add_treatment(training_data, states_effected, treatment_name = 'treatment'):
+    for temp_gene in training_data.keys(): 
+        if temp_gene == 'weight_dict': 
+            continue
+        tmp_feature_matrix = training_data[temp_gene]['feature_matrix'].copy()
+        indices = [index for index, element in enumerate(tmp_feature_matrix.columns) if any(substring in element for substring in states_effected)]
+
+        treatment_status = np.array([0] * tmp_feature_matrix.shape[1])
+        treatment_status[indices] = 1
+        tmp_feature_matrix.loc[treatment_name] = treatment_status
+        training_data[temp_gene]['feature_matrix'] = tmp_feature_matrix
+
+        training_data[temp_gene]['unlikely_activators'] = np.append(training_data[temp_gene]['unlikely_activators'], treatment_name)
+        training_data[temp_gene]['unlikely_repressors'] = np.append(training_data[temp_gene]['unlikely_repressors'], treatment_name)
+
+    return training_data
+
 def GA_fit_single_gene(training_dict, target_gene, corr_matrix, ideal_edges = 2, num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True, mutation_percent_genes = 25, GA_seed = 2, init_pop_seed = 2023):
     """Identify the regulatory interactions for a gene that minimizes the discrepancy between gene states labels and simulated gene states via regulatory interactions for one single gene. 
 
@@ -580,6 +597,10 @@ def create_network(training_dict, corr_matrix, ideal_edges = 2, num_generations 
         training_targets = training_dict[target_gene]['gene_status_labels'].copy()
 
         #ensure the correlation have the same order as compiled training data 
+        if training_data.index.isin(corr_matrix).all() == False: 
+            add_cat_list = list(training_data.index[training_data.index.isin(corr_matrix) == False])
+            for tmp_cat in add_cat_list: 
+                corr_matrix.loc[tmp_cat] = 0
         corr_matrix = corr_matrix.loc[training_data.index, :]
         corr_col = corr_matrix.loc[:, target_gene]
 
