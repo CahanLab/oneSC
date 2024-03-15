@@ -670,10 +670,10 @@ def create_network(training_dict, corr_matrix, ideal_edges = 2, num_generations 
             
             # if the number of edges stay below ideal edge, then we add in the reward 
             if np.sum(np.abs(solution)) > ideal_edges:
-                fitness_score = fitness_score + edge_limit_penalty
-                #fitness_score = fitness_score - ((np.sum(np.abs(solution)) - ideal_edges) * 2 * additional_edge_reward)
-            else:
-                fitness_score = fitness_score + edge_limit_rewards
+                #fitness_score = fitness_score + edge_limit_penalty
+                fitness_score = fitness_score - ((np.sum(np.abs(solution)) - ideal_edges) * 2 * additional_edge_reward)
+            #else:
+                #fitness_score = fitness_score + edge_limit_rewards
 
             # penalize unlikely activators 
             if len(bad_activator_index) > 0: 
