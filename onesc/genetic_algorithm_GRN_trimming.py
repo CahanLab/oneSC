@@ -340,7 +340,7 @@ def add_treatment(training_data, states_effected, treatment_name = 'treatment'):
 
         training_data[temp_gene]['unlikely_activators'] = np.append(training_data[temp_gene]['unlikely_activators'], treatment_name)
         training_data[temp_gene]['unlikely_repressors'] = np.append(training_data[temp_gene]['unlikely_repressors'], treatment_name)
-
+    training_data['weight_dict'][treatment_name] = 0
     return training_data
 
 def GA_fit_single_gene(training_dict, target_gene, corr_matrix, ideal_edges = 2, num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True, mutation_percent_genes = 25, GA_seed = 2, init_pop_seed = 2023):
