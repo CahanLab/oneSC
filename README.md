@@ -5,7 +5,7 @@ OneSC is an computational tool for inferring and simulating core transcription f
 
 Below is a walk-through tutorial on 
 1. how to infer the transcription factors circuit
-2. how to simulate synthetic single cells across developmental trajectories using the circuit 
+2. how to simulate synthetic single cell expression states across developmental trajectories using the circuit 
 
 ### Table of contents
 
@@ -44,6 +44,8 @@ import onesc
 import networkx as nx
 import pickle 
 import seaborn as sns 
+import matplotlib.pyplot as plt
+import os
 ```
 
 Load in the training data. 
@@ -64,6 +66,7 @@ clusters_G = onesc.construct_cluster_network(train_exp, samp_tab, initial_cluste
 We can visualize the networkx strcture of cluster-cluster transition graph. 
 ```
 nx.draw(clusters_G, with_labels = True)
+plt.show()
 ```
 <img src="img/cluster_cluster_graph.png" width="400">
 
@@ -162,8 +165,8 @@ for gene in init_state.index:
 Here is one way to run one single simulation across time step. To create a different simulation trajectory, just change the random seed. 
 ```
 rnd_seed = 1 # change the random seed to get  
-temp_simulator.simulate_exp(init_exp_dict, 'Myeloid_network', num_sim = 1800, t_interval = 0.1, noise_amp = 0.5, random_seed = rnd_seed)
-sim_exp = temp_simulator.sim_exp
+MySimulator.simulate_exp(init_exp_dict, 'Myeloid_network', num_sim = 1800, t_interval = 0.1, noise_amp = 0.5, random_seed = rnd_seed)
+sim_exp = MySimulator.sim_exp
 print(sim_exp) 
 
 #      0        1        2        3        4        5        6        7     \
@@ -207,6 +210,7 @@ UMAP_coord = onesc.UMAP_embedding_apply(train_obj, big_sim_df)
 # add the simulation time step into the UMAP 
 UMAP_coord['sim_time'] = [int(x.split("-")[1]) for x in list(UMAP_coord.index)]
 sns.scatterplot(x='UMAP_1', y='UMAP_2', hue='sim_time', data=UMAP_coord)
+plt.show()
 ```
 <img src="img/wt_UMAP.png" width="400">
 
@@ -223,12 +227,12 @@ perturb_dict['Cepbe'] = -1
 We would then pass the perturb dictionary as a parameter in *onesc.simulate_exp* function. Here is how we do it to run one single simulation.  
 ```
 rnd_seed = 1 # set the random seed to be reproducible 
-temp_simulator.simulate_exp(init_exp_dict, 'OneSC', perturb_dict, num_sim = 1800, t_interval = 0.1, noise_amp = 0.5, random_seed = rnd_seed)
+MySimulator.simulate_exp(init_exp_dict, 'Myeloid_network', perturb_dict, num_sim = 1800, t_interval = 0.1, noise_amp = 0.5, random_seed = rnd_seed)
 sim_exp = temp_simulator.sim_exp.copy()
 ```
 We can also pass the perturb dictionary as a parameter in *onesc.simulate_parallel* function to simulate in-silico perturbations in parallel. 
 ```
-onesc.simulate_parallel(temp_simulator, init_exp_dict, 'OneSC', perturb_dict = perturb_dict, n_cores = 10, output_dir = "sim_profiles_CepbeKO", num_runs = 100, num_sim = 1800, t_interval = 0.1, noise_amp = 0.5)
+onesc.simulate_parallel(MySimulator, init_exp_dict, 'Myeloid_network', perturb_dict = perturb_dict, n_cores = 10, output_dir = "sim_profiles_CepbeKO", num_runs = 100, num_sim = 1800, t_interval = 0.1, noise_amp = 0.5)
 ```
 Lastly, you can visualize the results in UMAP 
 ```
@@ -250,6 +254,7 @@ UMAP_coord = onesc.UMAP_embedding_apply(train_obj, big_sim_df)
 # add the simulation time step into the UMAP 
 UMAP_coord['sim_time'] = [int(x.split("-")[1]) for x in list(UMAP_coord.index)]
 sns.scatterplot(x='UMAP_1', y='UMAP_2', hue='sim_time', data=UMAP_coord)
+plt.show()
 ```
 <img src="img/cebpe_ko_UMAP.png" width="400">
 
