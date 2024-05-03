@@ -1,7 +1,18 @@
 import numpy as np 
 import pandas as pd
 import itertools
-import networkx as nx 
+import networkx as nx
+import anndata
+import scipy as sp
+from .genetic_algorithm_GRN_trimming import define_states
+from .genetic_algorithm_GRN_trimming import define_transition
+from .genetic_algorithm_GRN_trimming import curate_training_data
+from .genetic_algorithm_GRN_trimming import calc_corr # can we replace with x.T.corr()?
+from .genetic_algorithm_GRN_trimming import create_network_ensemble
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
+
+
 
 def find_gene_change_trajectory(train_exp, train_st, trajectory_cells_dict, cluster_col, pt_col, bool_thresholds, pseudoTime_bin, smooth_style = 'mean'):
     """Identify the approximate pseudotime at which the genes change status (on to off or off to on) along each trajectory. 
@@ -252,5 +263,6 @@ def extract_trajectory(clusters_G, initial_clusters, terminal_clusters):
             clusters_trajectory_dict["trajectory_" + str(i)] = item
             i = i + 1
     return clusters_trajectory_dict
+
 
 

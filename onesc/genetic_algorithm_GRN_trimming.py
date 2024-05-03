@@ -4,6 +4,7 @@ import pygad
 import itertools
 from joblib import Parallel, delayed, cpu_count
 import warnings 
+warnings.simplefilter(action='ignore', category=FutureWarning)
 
 def define_states(exp_tab, samp_tab, trajectory_cluster, vector_thresh, cluster_col = 'cluster_id', percent_exp = 0.3):
     """Define the cell state boolean profiles for each of the trajectory. 
@@ -779,7 +780,7 @@ def create_network(training_dict, corr_matrix, ideal_edges = 2, num_generations 
         '''
     return total_network
 
-def create_network_ensemble(training_dict, corr_matrix, n_cores = 16, run_parallel = True, ideal_edges = 2, num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True, mutation_percent_genes = 20, GA_seed_list = [1, 2, 3, 4], init_pop_seed_list = [21, 22, 23, 24]):
+def create_network_ensemble(training_dict, corr_matrix, n_cores = 16, run_parallel = True, ideal_edges = 2, num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True, mutation_percent_genes = 20, GA_seed_list = [1, 2, 3, 4], init_pop_seed_list = [21, 22, 23, 24], **kwargs):
     """Create an ensemble of inferred networks using different genetic algorithm and initial population seeds. 
 
     Args:

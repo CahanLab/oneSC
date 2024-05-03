@@ -9,7 +9,7 @@ import scanpy as sc
 import multiprocessing as mp
 import os
 import warnings
-
+warnings.simplefilter(action='ignore', category=FutureWarning)
 
 def simulate_parallel(OneSC_simulator, init_exp_dict, network_name, perturb_dict = {}, n_cores = 2, output_dir = "", num_runs = 10, num_sim = 1000, t_interval = 0.1, noise_amp = 0.1):
     """Running simulations using parallel. 
