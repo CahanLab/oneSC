@@ -167,7 +167,7 @@ def find_threshold_vector(exp_df, samp_st, cluster_col = "cluster", cutoff_perce
         cluster_exp[temp_cluster] = temp_exp.mean(axis = 1)
     return ((cluster_exp.max(axis = 1) - cluster_exp.min(axis = 1)) * cutoff_percentage + cluster_exp.min(axis = 1))
 
-def construct_cluster_network(train_exp, sampTab, initial_clusters, terminal_clusters, cluster_col = "cluster_id", pseudo_col = "pseudotime"):
+def construct_cluster_network(train_exp, sampTab, initial_clusters, terminal_clusters, cluster_col = "cluster_id", pseudo_col = "pseudotime", pt_margin = 0):
     """Construct a graph connecting the cell states or clusters transitions based on expression similarities and pseudotime ordering (lower pseudotime suggests higher upstream). 
        This function typically works the best when the transitional relationships are not cyclical (ex A->B->C->A). 
        If in any event where this function cannot create the cluster network, the user can also manually create a networkx directed graph object. 
@@ -197,17 +197,22 @@ def construct_cluster_network(train_exp, sampTab, initial_clusters, terminal_clu
     mean_pt['cluster'] = cluster_list 
     mean_pt['pt'] = pt_list
     mean_pt = mean_pt.sort_values("pt")
+    mean_pt.index = mean_pt['cluster']
     mean_exp = mean_exp.loc[:, mean_pt['cluster']]
 
     # calculate the euclidean distance between clusters 
     distance_df = pd.DataFrame() 
     for i in range(mean_exp.shape[1]):
         for j in range(i + 1, mean_exp.shape[1]):
-            temp_dict = {"starting": mean_exp.columns[i], "ending": mean_exp.columns[j], "distance": np.linalg.norm(mean_exp.iloc[:, j] - mean_exp.iloc[:, i])}
+            start_cluster = mean_exp.columns[i]
+            end_cluster = mean_exp.columns[j]
+            if mean_pt.loc[start_cluster, 'pt'] > mean_pt.loc[end_cluster, 'pt'] - pt_margin:
+                continue
+            temp_dict = {"starting": start_cluster, "ending": end_cluster, "distance": np.linalg.norm(mean_exp.iloc[:, j] - mean_exp.iloc[:, i])}
             distance_df = pd.concat([distance_df, pd.DataFrame([temp_dict])], ignore_index = True)
     distance_df['norm_dist'] = (distance_df['distance'] - np.min(distance_df['distance'])) / (np.max(distance_df['distance']) - np.min(distance_df['distance']))
     distance_df['starting_pt'] = None
-    mean_pt.index = mean_pt['cluster']
+    
 
     # calculate the combined score 
     for cluster in np.unique(distance_df['starting']):
