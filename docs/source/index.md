@@ -17,6 +17,6 @@ The second way contains wrapper functions that work with popular single-cell dat
 Installation <installation.md>
 Method 1: A. Infer functional circuit <infer_grn.md>
 Method 1: B. Simulation of Synthetic Cells <simulation_syn_cells.md>
-Method 2: A. Infer functional circuit - Scanpy object <infer_grn_scanpy.md>
-Method 2: B. Simulation of Synthetic Cells - Scanpy object <infer_grn_scanpy.md>
+Method 2: A. Infer functional circuit - AnnData object <infer_grn_scanpy.md>
+Method 2: B. Simulation of Synthetic Cells - AnnData object <simulation_syn_cells_scanpy.md>
 ```
