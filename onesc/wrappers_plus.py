@@ -5,7 +5,6 @@ import itertools
 import networkx as nx
 import anndata as ad
 import scipy as sp
-import pySingleCellNet as pySCN
 from .genetic_algorithm_GRN_trimming import define_states
 from .genetic_algorithm_GRN_trimming import define_transition
 from .genetic_algorithm_GRN_trimming import curate_training_data
