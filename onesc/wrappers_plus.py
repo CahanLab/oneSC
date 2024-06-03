@@ -203,6 +203,10 @@ def infer_grn(
 
     initial_clusters = start_end_clusters['start']
     terminal_clusters = start_end_clusters['end']
+
+    for clusters start_end_clusters.values:
+        for c in clusters:
+            assert "_" not in c, f"Cluster names may not contain underscores. Offending cluster: {c}"
     
     print("Preparing states and data for GA ...")
     lineage_cluster = extract_trajectory(cellstate_graph, initial_clusters, terminal_clusters)
