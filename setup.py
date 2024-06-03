@@ -28,7 +28,8 @@ setuptools.setup(
         'scipy>=1.8.0', 
         'scanpy>=1.9.1', 
         'joblib>=1.1.0',
-        'networkx>=2.8.8'
+        'networkx>=2.8.8',
+        'adjustText'
     ],
     python_requires='>=3.9',
 )
