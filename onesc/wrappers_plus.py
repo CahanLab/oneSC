@@ -323,7 +323,7 @@ def simulate_parallel_adata(OneSC_simulator, init_exp_dict, network_name, pertur
         sim_steps = sim_exp.columns.tolist()
         sim_exp.columns = ['timestep_' + str(i) for i in sim_steps]
         adTemp = ad.AnnData(sim_exp.T)
-        adTemp.obs['sim_time'] = sim_exp.columns.tolist()
+        adTemp.obs['sim_time'] = sim_steps
         adata_list.append(adTemp)
     pool.map(run_parallel, num_runs_list)
     return adata_list
