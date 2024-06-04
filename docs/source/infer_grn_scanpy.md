@@ -1,5 +1,5 @@
 # Inference of functional transcription factors network (AnnData Object)
-In this tutorial, we are going to show how to run OneSC using AnnData object. We are going to use the mouse myeloid single-cell data from [Paul et al, 2015](https://pubmed.ncbi.nlm.nih.gov/26627738/). We have refined the annotation of these 2,670 cells. Please download the [h5ad file containing the expression values of 12 core transcription factors in these cells here](https://cnobjects.s3.amazonaws.com/OneSC/0.1.0/Paul15_040824.h5ad). Note that this annData object includes cell type annotation and precomputed pseudotime metadata in adata.obs['cell_types'] and adata.obs['dpt_pseudotime'], respectively.  
+In this tutorial, we are going to show how to run OneSC using AnnData object. We are going to use the mouse myeloid single-cell data from [Paul et al, 2015](https://pubmed.ncbi.nlm.nih.gov/26627738/). We have refined the annotation of these 2,670 cells. Please download the [h5ad file containing the expression values of 12 core transcription factors in these cells here](https://cnobjects.s3.amazonaws.com/OneSC/0.1.0/Paul15_040824.h5ad). Note that this annData object includes cell type annotation and precomputed pseudotime metadata in adata.obs['cell_types'] and adata.obs['dpt_pseudotime'] (pseudotime should scaled to be between 0 and 1), respectively. Part of this tutorial will use the package [pySingleCellNet](https://pysinglecellnet.readthedocs.io/en/latest/).  
 
 ### Setup
 Launch Jupyter or your Python interpreter. Import the required packages and functions.
@@ -26,6 +26,8 @@ Load in the training data:
 ```
 adata = sc.read_h5ad("Paul15_040824.h5ad")
 ```
+*Important notice*: Make sure there are no underscore "_" in any of the cell cluster annotations. 
+
 ### GRN inference 
 The first step in reconstructing or inferring a GRN with oneSC is to determine the directed state graph of the cells. In other words, what is the sequence of distinct states that a cell passes through from the start to a terminal state? oneSC requires that the user provide cell state annotations. Typically these are in the form of cell clusters or cell type annotations. oneSC also requires that the user specify the initial cell states and the end states. In our data, the cell states have already been provided in  .obs['cell_types']. Now, we will specify the initial cell states and the end states:
 ```
@@ -54,15 +56,26 @@ Now we are ready to infer the GRN. There are quite a few parameters to `infer_gr
 - cellstate_graph: this is just the state graph we made earlier, H.
 - start_end_clusters: a dict of 'start', and 'end' cell states.
 - adata: the training data.
-- run_parallel: (bool, optional): whether to run network inference in parallel. Defaults to True
 - n_cores (int, optional): number of cores to run the network inference in parallel. Defaults to 16
+- GA_seed_list (list, optional): a list of seeds used for GA to be reproducible during the ensemble inference of GRNs
+- init_pop_seed_list (list, optional): a list of seeds to generate initial population of subnetworks during the ensemble inference of GRNs 
+- act_tolerance (float, optional): the pseudotime window in which if a transcription factor change status earlier than the pseudotime window before the target gene change status, then the transcription factor is recorded to change activity status before the target gene. This helps finetune the Boolean activity status of regulator profiles and target gene activity status when target gene and transcription factor both change status during cell state transition. Typically this number is 1/3-1/5 of the smallest psuedotime difference between two adjuscent cell clusters. Defaults to 0.04.
 
 infer_grn() returns a Pandas DataFrame. We convert it to an igraph graph for visualization.
 
 ```
 start_end_states = {'start': ['CMP'], 'end':['MK', 'Erythrocytes', 'Granulocytes', 'Monocytes']}
 
-iGRN = onesc.infer_grn(H, start_end_states, adata, num_generations = 20, sol_per_pop = 30, reduce_auto_reg=True, ideal_edges = 0, GA_seed_list = [1, 3], init_pop_seed_list = [21, 25], cluster_col='cell_types', pseudoTime_col='dpt_pseudotime')
+iGRN = onesc.infer_grn(H, 
+                       start_end_states, 
+                       adata, 
+                       cluster_col='cell_types', 
+                       pseudoTime_col='dpt_pseudotime',
+                       ideal_edge_percent = 0.4, 
+                       GA_seed_list = [1, 2, 3, 4, 5], 
+                       init_pop_seed_list = [21, 22, 23, 24, 25], 
+                       n_cores = 16, 
+                       act_tolerance = 0.04)
 
 grn_ig = onesc.dataframe_to_igraph(iGRN)
 onesc.plot_grn(grn_ig, layout_method='fr',community_first=True)

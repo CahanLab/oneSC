@@ -14,13 +14,14 @@ import matplotlib.pyplot as plt
 import os
 ```
 
-Load in the training data. 
+Load in the training data. Note that the sample_tab.csv includes cell type annotation and precomputed pseudotime metadata in the column 'cell_types' and column 'dpt_pseudotime' (pseudotime should scaled to be between 0 and 1), respectively. 
 ```
 train_exp = pd.read_csv("train_exp.csv", index_col = 0)
 samp_tab = pd.read_csv("samp_tab.csv", index_col = 0)
 pt_col = 'dpt_pseudotime'
 cluster_col = 'cell_types'
 ```
+*Important notice*: Make sure there are no underscore "_" in any of the cell cluster annotations. 
 ### GRN inference 
 There are a few steps that needs to be taken before we could use OneSC to infer GRNs. The first step in reconstructing or inferring a GRN with oneSC is to determine the directed state graph of the cells. In other words, what is the sequence of distinct states that a cell passes through from the start to a terminal state? oneSC requires that the user provide cell state annotations. Typically these are in the form of cell clusters or cell type annotations. oneSC also requires that the user specify the initial cell states and the end states. In our data, the cell states have already been provided in 'cell_types' column in 'samp_tab'. Now, we will specify the initial cell states and the end states:
 
