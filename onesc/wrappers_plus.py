@@ -1,10 +1,8 @@
 import numpy as np 
 import pandas as pd
 import scanpy as sc
-import itertools
 import networkx as nx
 import anndata as ad
-import scipy as sp
 from .genetic_algorithm_GRN_trimming import define_states
 from .genetic_algorithm_GRN_trimming import define_transition
 from .genetic_algorithm_GRN_trimming import curate_training_data
@@ -15,7 +13,6 @@ import multiprocessing as mp
 import warnings
 import igraph as ig
 from igraph import Graph
-import matplotlib
 import matplotlib.pyplot as plt
 from adjustText import adjust_text
 warnings.simplefilter(action='ignore', category=FutureWarning)
@@ -202,6 +199,31 @@ def define_states_adata(adata, min_mean = 0.5, min_percent_cells = 0.20) -> pd.S
     gene_names = adQuery.var_names if hasattr(adQuery, 'var_names') else np.arange(adQuery.X.shape[1])
     return pd.Series(criteria_met.astype(int), index=gene_names)
 
+def define_boolean_states_anndata(adata: anndata.AnnData, cluster_col: str = 'cluster_id', cutoff_percentage: float = 0.4, percent_exp: float = 0.3) -> pd.DataFrame:
+    """Define Boolean profiles for all the cell types in the AnnData object. 
+
+    Args:
+        adata (anndata.AnnData): AnnData object of single-cell expression profiles. 
+        cluster_col (str, optional): Column name in the AnnData.obs for the column with cluster ids or cell types. Defaults to "cluster".
+        cutoff_percentage (float, optional): The minimum percent cut-off of the difference between highest and lowest average experssion. The cut-off for Boolean activity status for each gene is defined as "cutoff_percentage * the difference between highest and lowest cluster average expression". Defaults to 0.4.
+        percent_exp (float, optional): The minimum percent expression of cells in the cell state/cluster for a gene to be considered as ON even if the average expression passes the expression threshold. Defaults to 0.3.
+
+    Returns:
+        pd.DataFrame: Dataframe of Boolean activity profiles for all the cell states in the single-cell data. 
+
+    """
+    exp_tab = adata.to_df().T.copy()
+    samp_tab = adata.obs.copy()
+    vector_thresh = find_threshold_vector(exp_tab, samp_tab, cluster_col = cluster_col, cutoff_percentage = cutoff_percentage)
+    def check_zero(vector):
+        return (len(vector) - np.sum(vector == 0)) / len(vector)
+    boolean_states_df = pd.DataFrame()
+    for cell_type in np.unique(samp_tab[cluster_col]):
+        sub_st = samp_tab.loc[samp_tab[cluster_col] == cell_type, :]
+        sub_exp = exp_tab.loc[:, sub_st.index]
+        boolean_states_df[cell_type] = np.logical_and((sub_exp.mean(axis = 1) >= vector_thresh), (sub_exp.apply(check_zero, axis = 1) >= percent_exp)) * 1
+    return boolean_states_df 
+
 def infer_grn(
     cellstate_graph: nx.DiGraph,
     start_end_clusters: dict,
@@ -298,7 +320,8 @@ def simulate_parallel_adata(OneSC_simulator, init_exp_dict, network_name, pertur
         np.random.seed(i)
         OneSC_simulator.simulate_exp(init_exp_dict, network_name, perturb_dict, num_sim = num_sim, t_interval = t_interval, noise_amp = noise_amp, random_seed = i)
         sim_exp = OneSC_simulator.sim_exp.copy()
-        # sim_exp.to_csv(os.path.join(output_dir, str(i) + "_simulated_exp.csv"))
+        sim_steps = sim_exp.columns.tolist()
+        sim_exp.columns = ['timestep_' + str(i) for i in sim_steps]
         adTemp = ad.AnnData(sim_exp.T)
         adTemp.obs['sim_time'] = sim_exp.columns.tolist()
         adata_list.append(adTemp)
