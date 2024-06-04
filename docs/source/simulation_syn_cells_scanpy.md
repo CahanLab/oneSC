@@ -4,7 +4,7 @@
 After the inference of GRNs from [previous step](infer_grn_scanpy.md), we can perform simulations using the GRN as a backbone. For all simulations, we need to define the start state. In our case, we know that cells start in the CMP state. To determine the Boolean state of genes in the CMP state, we subset the adata to those cells and then apply thresholds on the mean expression and the percent of cells in which the gene is detected:
 ```
 adCMP = adata[adata.obs['cell_types'] == 'CMP'].copy()
-xstates = onesc.define_states_adata(adCMP, min_mean = 0.05, min_percent_cells = 0.20) * 2 
+xstates = onesc.define_states_adata(adCMP, min_mean = 0.5, min_percent_cells = 0.20) * 2 
 ```
 Now we construct a OneSC simulator object:
 ```

@@ -29,7 +29,8 @@ setuptools.setup(
         'scanpy>=1.9.1', 
         'joblib>=1.1.0',
         'networkx>=2.8.8',
-        'adjustText'
+        'adjustText', 
+        'igraph'
     ],
     python_requires='>=3.9',
 )

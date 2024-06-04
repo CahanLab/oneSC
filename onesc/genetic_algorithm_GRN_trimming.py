@@ -15,7 +15,7 @@ def define_states(exp_tab, samp_tab, trajectory_cluster, vector_thresh, cluster_
         trajectory_cluster (dict): The output from onesc.extract_trajectory. It is a dictionary detailing the clusters along a trajectory for all trajectories. 
         vector_thresh (pandas.Series): The output from onesc.find_threshold_vector. It is a pandas Series of the expression threshold for all the genes. 
         cluster_col (str, optional): The column name of the column in the sample table with cell state/cluster information. Defaults to 'cluster_id'.
-        percent_exp (float, optional): The minimum percent expression of cells in the cell state/cluster for a gene to be considered as ON even if the average expression passes the expression threshold. Defaults to 0.2.
+        percent_exp (float, optional): The minimum percent expression of cells in the cell state/cluster for a gene to be considered as ON even if the average expression passes the expression threshold. Defaults to 0.3.
     
     Returns:
         dict: A dictionary containing all the Boolean gene states for different cell state/clusters in a trajectory for all trajectories. 
@@ -801,14 +801,14 @@ def create_network(training_dict, corr_matrix, ideal_edges = 2, num_generations 
         '''
     return total_network
 
-def create_network_ensemble(training_dict, corr_matrix, n_cores = 16, run_parallel = True, ideal_edges = 2, num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True, mutation_percent_genes = 20, GA_seed_list = [1, 2, 3, 4], init_pop_seed_list = [21, 22, 23, 24], **kwargs):
+def create_network_ensemble(training_dict, corr_matrix, n_cores = 16, run_parallel = True, ideal_edges = 2, num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True, mutation_percent_genes = 20, GA_seed_list = [1, 2, 3, 4], init_pop_seed_list = [21, 22, 23, 24]):
     """Create an ensemble of inferred networks using different genetic algorithm and initial population seeds. 
 
     Args:
         training_dict (dict): The output from onesc.curate_training_data. 
         corr_matrix (pandas.DataFrame): The Pearson correlation matrix. Could use any other distance related metrics as well as long as they are between 0 and 1. This metric is used to decide which transcription regulators to choose if there are multiple transcription regulators with the same expression states across cell states. 
-        n_cores (int, optional): number of cores to run the network inference in parallel. Defaults to 16.
-        run_parallel (bool, optional): whether to run network inference in parallel. Defaults to True.
+        n_cores (int, optional): The number of cores to run the network inference in parallel. Defaults to 16.
+        run_parallel (bool, optional): Whether to run network inference in parallel. Defaults to True.
         ideal_edges (int, optional): The ideal number of incoming edges per gene. Defaults to 2.
         num_generations (int, optional): Number of generations for genetic algorithm per gene per iteration. Defaults to 1000.
         max_iter (int, optional): Maximum number of iterations for genetic algorithm. If the fitness has not change in 3 iterations then stop early. Defaults to 10.
@@ -816,11 +816,11 @@ def create_network_ensemble(training_dict, corr_matrix, n_cores = 16, run_parall
         sol_per_pop (int, optional): Number of solutions to keep per generation for genetic algorithm. Defaults to 10.
         reduce_auto_reg (bool, optional): If True, remove auto activation is not needed for states satisfaction. Defaults to True.
         mutation_percent_genes (float, optional): The mutation percentage. Defaults to 25. 
-        GA_seed_list (list, optional): a list of seeds for genetic algorithm. Defaults to [1, 2, 3, 4].
-        init_pop_seed_list (list, optional): a list of seeds for generating initial populations. Defaults to [20, 21, 23, 24].
+        GA_seed_list (list, optional): A list of seeds for genetic algorithm. Defaults to [1, 2, 3, 4].
+        init_pop_seed_list (list, optional): A list of seeds for generating initial populations. Defaults to [20, 21, 23, 24].
 
     Returns:
-        _type_: _description_
+        list: First item is the majority network. Second item the list of GRNs that was generated in the ensemble. 
     """
     seeds_combo = list(itertools.product(GA_seed_list, init_pop_seed_list))
 
