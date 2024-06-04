@@ -148,9 +148,6 @@ def dataframe_to_igraph(df):
 
 
 
-
-
-
 def create_networkx(network_df): 
     G = nx.DiGraph()
     network_df.index = list(range(0, network_df.shape[0])) 
@@ -197,7 +194,7 @@ def infer_grn(
         df = pd.DataFrame(adata.X.toarray(), index=adata.obs.index, columns=adata.var.index)
         train_exp = df.T
     else:
-        train_exp = adata.X.T # beware this does not work as intended!
+        train_exp = adata.to_df().T # beware this does not work as intended!
 
     samp_tab = adata.obs.copy()
 
@@ -214,7 +211,7 @@ def infer_grn(
     corr_mat = calc_corr(train_exp)
     ideal_edge_num = round(ideal_edge_percent * corr_mat.shape[1])
     print("Starting network reconstruction with GA ...")
-    grn_ensemble = create_network_ensemble(training_data, corr_mat, **kwargs)
+    grn_ensemble = create_network_ensemble(training_data, corr_mat, ideal_edge_num, **kwargs)
     print("GRN reconstruction complete.")
     inferred_grn = grn_ensemble[0]
     return inferred_grn
