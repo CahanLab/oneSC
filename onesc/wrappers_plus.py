@@ -235,6 +235,7 @@ def infer_grn(
     ideal_edge_percent: float = 0.4,
     pseudoTime_bin: float = 0.01, 
     act_tolerance: float = 0.04, 
+    selected_regulators: list = [],
     GA_seed_list: list = [1, 2, 3, 4, 5], 
     init_pop_seed_list: list = [21, 22, 23, 24, 25], 
     n_cores: int = 16,
@@ -253,12 +254,12 @@ def infer_grn(
         ideal_edge_percent (float, optional): The ideal network density for each subnetwork. Defaults to 0.4.
         pseudoTime_bin (float, optional): The sliding psudotime bin size at which the gene expressions of the cells within are averaged forming gene expression dynamics across pseudotime. It is also the resolution at which the activity changes for the genes are recorded. If the cell density across trajectory is high, consider lowering this number for more accurate pinpoint at which genes change activity. Defaults to 0.01. 
         act_tolerance (float, optional): The pseudotime window at which two genes are considered to change at the same time in the scenerio when two changed status during cell state transition. Typically this number is 1/3-1/5 of the smallest psuedotime difference between two adjuscent cell clusters. Defaults to 0.04.
+        selected_regulators (list, optional): The list of regulators or transcription factors. Defaults to list(). If input an empty list, then assume all genes in the network are capable of transcriptional regulations. 
         GA_seed_list (list, optional): a list of seeds for genetic algorithm. Defaults to [1, 2, 3, 4].
         init_pop_seed_list (list, optional): a list of seeds for generating initial populations. Defaults to [20, 21, 23, 24].
         n_cores (int, optional): number of cores to run the network inference in parallel. Defaults to 16.
 
     Kwargs:
-        selected_regulators (list, optional): The list of regulators or transcription factors. Defaults to list(). If input an empty list, then assume all genes are capable of transcriptional regulations. 
         run_parallel (bool, optional): Whether to run network inference in parallel. Defaults to True.
         num_generations (int, optional): Number of generations for genetic algorithm per gene per iteration. Defaults to 1000.
         max_iter (int, optional): Maximum number of iterations for genetic algorithm. If the fitness has not change in 3 iterations then stop early. Defaults to 10.
@@ -283,7 +284,7 @@ def infer_grn(
     lineage_time_change_dict = find_gene_change_trajectory(train_exp, samp_tab, lineage_cluster, cluster_col, pseudoTime_col, vector_thresh, pseudoTime_bin = pseudoTime_bin) 
     state_dict = define_states(train_exp, samp_tab, lineage_cluster, vector_thresh, cluster_col, percent_exp =  percent_exp)
     transition_dict = define_transition(state_dict)
-    training_data = curate_training_data(state_dict, transition_dict, lineage_time_change_dict, samp_tab, cluster_id = cluster_col, pt_id = pseudoTime_col, act_tolerance = act_tolerance, **kwargs)
+    training_data = curate_training_data(state_dict, transition_dict, lineage_time_change_dict, samp_tab, cluster_id = cluster_col, pt_id = pseudoTime_col, act_tolerance = act_tolerance, selected_regulators = selected_regulators)
     corr_mat = calc_corr(train_exp)
     ideal_edge_num = round(ideal_edge_percent * corr_mat.shape[1])
     print("Starting network reconstruction with GA ...")
