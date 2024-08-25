@@ -4,6 +4,9 @@ import pygad
 import itertools
 from joblib import Parallel, delayed, cpu_count
 import warnings 
+from tqdm_joblib import tqdm_joblib
+from tqdm import tqdm
+
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 def define_states(exp_tab, samp_tab, trajectory_cluster, vector_thresh, cluster_col = 'cluster_id', percent_exp = 0.3):
@@ -842,12 +845,16 @@ def create_network_ensemble(training_dict, corr_matrix, n_cores = 16, run_parall
         warnings.warn("Maximum number of cores is " + str(cpu_count()))
         n_cores = cpu_count()
     if run_parallel == True: 
-        parallel_results = Parallel(n_jobs=n_cores)(
-            delayed(mass_train)(*args) for args in seeds_combo
-        )
+        with tqdm_joblib(desc="Network inference ensemble (parallelization " + str(cpu_count()) + " cores)", total=len(seeds_combo)) as progress_bar:
+            parallel_results = list(
+                Parallel(n_jobs=n_cores)(
+                    delayed(mass_train)(*args) for args in seeds_combo
+                )
+            )
+
     else: 
         parallel_results = list()
-        for temp_GA_seed, temp_init_seed in seeds_combo:
+        for temp_GA_seed, temp_init_seed in tqdm(seeds_combo, desc="Network inference ensemble (no parallelization)"):
             parallel_results.append(mass_train(temp_GA_seed, temp_init_seed))
 
     def get_majority_network(parallel_results):
