@@ -19,10 +19,10 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 
 
 def construct_cluster_graph_adata(adata, **kwargs):
-    """_summary_
+    """Construct cluster transition graph using andata 
 
     Args:
-        adata (annData): _description_
+        adata (annData): annData object of the single-cell experiment. 
     
     Kwargs:
         initial_clusters (list): A list of user defined initial cell states or clusters. 
