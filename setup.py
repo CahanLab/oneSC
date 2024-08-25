@@ -30,7 +30,10 @@ setuptools.setup(
         'joblib>=1.1.0',
         'networkx>=2.8.8, <=3.2.1',
         'adjustText>=1.1.1', 
-        'igraph>=0.11.5'
+        'igraph>=0.11.5', 
+        'tqdm_joblib>=0.0.4', 
+        'cairocffi>=1.7.1', 
+        'pycairo>=1.26.1'
     ],
     python_requires='>=3.9',
 )

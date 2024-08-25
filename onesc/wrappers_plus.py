@@ -104,10 +104,9 @@ def plot_state_graph(nx_network, layout = "sugiyama"):
     v_style_trajectory["margin"] = (50)
     ig_net = Graph.from_networkx(nx_network)
     ig_net.vs["label"] = ig_net.vs["_nx_name"]
-    fig, ax = plt.subplots()
-    ig.plot(ig_net, **v_style_trajectory)
-    ax.invert_yaxis()
-    plt.show()
+    
+    return ig.plot(ig_net, **v_style_trajectory)
+
 
 def dataframe_to_igraph(df):
     """
