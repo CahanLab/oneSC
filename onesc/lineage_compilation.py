@@ -4,11 +4,11 @@ import itertools
 import networkx as nx
 import anndata
 import scipy as sp
-from .genetic_algorithm_GRN_trimming import define_states
-from .genetic_algorithm_GRN_trimming import define_transition
-from .genetic_algorithm_GRN_trimming import curate_training_data
-from .genetic_algorithm_GRN_trimming import calc_corr # can we replace with x.T.corr()?
-from .genetic_algorithm_GRN_trimming import create_network_ensemble
+from .genetic_algorithm_GRN import define_states
+from .genetic_algorithm_GRN import define_transition
+from .genetic_algorithm_GRN import curate_training_data
+from .genetic_algorithm_GRN import calc_corr # can we replace with x.T.corr()?
+from .genetic_algorithm_GRN import create_network_ensemble
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
