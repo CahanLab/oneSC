@@ -10,13 +10,10 @@ from .genetic_algorithm_GRN import calc_corr
 from .genetic_algorithm_GRN import create_network_ensemble
 from .lineage_compilation import *
 import multiprocessing as mp
-import warnings
 import igraph as ig
 from igraph import Graph
 import matplotlib.pyplot as plt
 from adjustText import adjust_text
-warnings.simplefilter(action='ignore', category=FutureWarning)
-
 
 def construct_cluster_graph_adata(adata, **kwargs):
     """Construct cluster transition graph using andata 

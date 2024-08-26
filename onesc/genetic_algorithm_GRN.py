@@ -3,11 +3,8 @@ import pandas as pd
 import pygad
 import itertools
 from joblib import Parallel, delayed, cpu_count
-import warnings 
 from tqdm_joblib import tqdm_joblib
 from tqdm import tqdm
-
-warnings.simplefilter(action='ignore', category=FutureWarning)
 
 def define_states(exp_tab, samp_tab, trajectory_cluster, vector_thresh, cluster_col = 'cluster_id', percent_exp = 0.3):
     """Define the cell state boolean profiles for each of the trajectory. 

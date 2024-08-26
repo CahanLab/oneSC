@@ -9,8 +9,6 @@ from .genetic_algorithm_GRN import define_transition
 from .genetic_algorithm_GRN import curate_training_data
 from .genetic_algorithm_GRN import calc_corr # can we replace with x.T.corr()?
 from .genetic_algorithm_GRN import create_network_ensemble
-import warnings
-warnings.simplefilter(action='ignore', category=FutureWarning)
 
 def find_gene_change_trajectory(train_exp, train_st, trajectory_cells_dict, cluster_col, pt_col, bool_thresholds, pseudoTime_bin = 0.01, smooth_style = 'mean'):
     """Identify the approximate pseudotime at which the genes change status (on to off or off to on) along each trajectory. 

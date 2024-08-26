@@ -9,7 +9,7 @@ import scanpy as sc
 import multiprocessing as mp
 import os
 import warnings
-warnings.simplefilter(action='ignore', category=FutureWarning)
+warnings.filterwarnings('ignore')
 
 def simulate_parallel(OneSC_simulator, init_exp_dict, network_name, perturb_dict = {}, n_cores = 2, output_dir = "", num_runs = 10, num_sim = 1000, t_interval = 0.1, noise_amp = 0.1):
     """Running simulations using parallel. 
@@ -95,12 +95,6 @@ def UMAP_embedding_apply(train_obs, query_exp):
     UMAP_matrix = pd.DataFrame(UMAP_matrix, index = PCA_features.index, columns = ['UMAP_1', 'UMAP_2'])
     return UMAP_matrix
 
-def gaussian_kernel(x, mean, stdv):
-    bandwidth = np.linalg.norm(stdv)
-    center = x - mean
-    guassian_result = np.exp(-np.linalg.norm(center) / (2 * bandwidth))
-    return guassian_result
-
 def select_regulators_transition(transition_dict, num_prev = 2): 
     potential_reg_dict = dict()
     
@@ -165,8 +159,17 @@ def gamFit(expMat,genes,celltime):
         y = z["z"].values
         gam = GAM(l(0)).fit(X,y)
         p = gam.statistics_['p_values'][0]
+
+        # check if the GAM converges 
+        def isNaN(num):
+            return num != num
+        
+        if isNaN(p) == True: 
+            print('Could not estimate GAM coefficients for ' + input_data.name)
+
         return p
-    ans = expMat.loc[genes2, celltime.index].apply(fit_gam_per_gene,axis=1)
+    
+    ans = expMat.loc[list(genes2), list(celltime.index)].apply(fit_gam_per_gene,axis=1)
     return ans
 
 def suggest_dynamic_genes(exp_tab, samp_tab, trajectory_dict, cluster_col, pt_col, adj_p_cutoff = 0.05, log2_change_cutoff = 1.5, min_exp_cutoff = 1):
@@ -185,6 +188,7 @@ def suggest_dynamic_genes(exp_tab, samp_tab, trajectory_dict, cluster_col, pt_co
     average_df['max_exp'] = max_exp_list 
     average_df['log2_change'] = None
     
+    # baseline all the genes to be at least 0.01 so log fold change won't be skewed
     average_df.loc[average_df['min_exp'] < 0.01, 'min_exp'] = 0.01
     average_df.loc[average_df['max_exp'] < 0.01, 'max_exp'] = 0.01
 
@@ -210,8 +214,7 @@ def suggest_dynamic_genes(exp_tab, samp_tab, trajectory_dict, cluster_col, pt_co
         t1 = sub_samp_tab["pseudotime"]
         t1C = t1[ids]
 
-        print("starting gamma...")
-        gpChr = pd.DataFrame(gamFit(sub_exp_tab.loc[average_df.index, t1C.index],average_df.index,t1))
+        gpChr = pd.DataFrame(gamFit(sub_exp_tab.loc[list(average_df.index), list(t1C.index)], average_df.index,t1))
         gpChr.columns = ["dynamic_pval"]
         gpChr['traj_name'] = traj_name
         
@@ -226,46 +229,14 @@ def suggest_dynamic_genes(exp_tab, samp_tab, trajectory_dict, cluster_col, pt_co
     new_output.index = new_output['gene']
     new_output = new_output.dropna()
     new_output['rank'] = rankdata(new_output['dynamic_pval'])
-    
+    new_output['adj_p'] = multipletests(new_output['dynamic_pval'], method = 'fdr_bh')[1]
+
     average_df = average_df.loc[average_df['log2_change'] >= log2_change_cutoff, :].copy()
     average_df = average_df.loc[average_df['max_exp'] >= min_exp_cutoff, :].copy()
     new_output = new_output.loc[new_output['gene'].isin(average_df.index), :]
     average_df = average_df.loc[new_output.index, :]
 
     new_output = pd.concat([new_output, average_df], axis = 1)
+    new_output = new_output.loc[new_output['adj_p'] < adj_p_cutoff, :].copy()
     return new_output
 
-def suggest_dynamic_TFs(exp_tab, samp_tab, tf_list, cluster_col, n_top_genes = 2000, adj_p_cutoff = 0.05, logfold_cutoff = 2, pct_exp_cutoff = 0.1):
-    temp_adata = sc.AnnData(exp_tab.T)
-    temp_adata.obs = samp_tab
-    sc.pp.highly_variable_genes(temp_adata, n_top_genes = n_top_genes,flavor = 'seurat')
-    temp_adata = temp_adata[:, temp_adata.var.highly_variable]
-    i_TFs = np.intersect1d(np.array(temp_adata.var.index), tf_list)
-    exp_tab = exp_tab.loc[i_TFs, :].copy()
-    temp_adata = temp_adata[:, i_TFs].copy()
-    average_df = pd.DataFrame(data = None, index = exp_tab.index, columns = np.unique(samp_tab[cluster_col]))
-    pval_list = list()
-    logfold_list = list()
-    percent_list = list()
-    for gene in average_df.index: 
-        for cell_type in np.unique(samp_tab[cluster_col]): 
-            temp_samp_tab = samp_tab.loc[samp_tab[cluster_col] == cell_type, :]
-            temp_exp = exp_tab.loc[gene, temp_samp_tab.index]
-            average_df.loc[gene, cell_type] = np.mean(temp_exp)
-        min_cat = average_df.columns[np.where(average_df.loc[gene, :] == np.min(average_df.loc[gene, :]))[0]][0]
-        max_cat = average_df.columns[np.where(average_df.loc[gene, :] == np.max(average_df.loc[gene, :]))[0]][0]
-        # write a function that performs wilcoxon rank sum test 
-        sub_temp_adata = temp_adata[temp_adata.obs[cluster_col].isin([min_cat, max_cat]), gene].copy()
-        sc.tl.rank_genes_groups(sub_temp_adata, cluster_col, method='wilcoxon', pts = True)
-        test_results = sc.get.rank_genes_groups_df(sub_temp_adata, group = max_cat)
-        pval_list.append(test_results.loc[0, 'pvals'])
-        logfold_list.append(test_results.loc[0, 'logfoldchanges'])
-        percent_list.append(test_results.loc[0, 'pct_nz_group'])
-    average_df['p_val'] = pval_list
-    average_df['adj_p'] = multipletests(pval_list, method = 'fdr_bh')[1]
-    average_df['logfold'] = logfold_list
-    average_df['pct_exp'] = percent_list
-    average_df = average_df.loc[average_df['adj_p'] < adj_p_cutoff, :].copy()
-    average_df = average_df.loc[average_df['logfold'] > logfold_cutoff, :].copy()
-    average_df = average_df.loc[average_df['pct_exp'] > pct_exp_cutoff, :].copy()
-    return average_df
