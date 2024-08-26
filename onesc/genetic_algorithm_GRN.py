@@ -60,7 +60,8 @@ def define_transition(state_dict):
         transition_dict[trajectory] = temp_df
     return transition_dict
 
-def curate_training_data(state_dict, transition_dict, trajectory_time_change_dict, samp_tab, cluster_id = "cluster_id", pt_id = "dpt_pseudotime",act_tolerance = 0.01, selected_regulators = list()):
+
+def curate_training_data(state_dict, transition_dict, trajectory_time_change_dict, samp_tab, cluster_id = "cluster_id", pt_id = "dpt_pseudotime",act_tolerance = 0.01, selected_regulators = list(), show_conflicts = False):
     """Compile training data before running with genetic algorithm. This curates the expression states of the gene (as label) and the expression states (as features) of all transcription regulators at different cell states. 
        In the event when the gene and a transcription regulator both change at the same cell staste, pseudotime ordering at which the gene and transcription regulator change will be considered when curating gene expression states (label) and transcription regulators expression states (features). 
        For instance, if transcription regulator change way ahead of target gene change (< target gene change - act_tolerance), then for curating the feature matrix, we would use the post changed status of the transcription regulator. 
@@ -75,7 +76,7 @@ def curate_training_data(state_dict, transition_dict, trajectory_time_change_dic
         pt_id (str, optional): The column name of the column in the sample table with pseudotime information. Defaults to "dpt_pseudotime".
         act_tolerance (float, optional): The range of activation window (pseudotime units). If both target gene and regulator change in the same cell state and if the pseudotime at which the regulator change is < target gene change - act_tolerance, then in the curated gene state in the feature matrix of the regulator would use the postchanged regulator state. Defaults to 0.01.
         selected_regulators (list, optional): The list of regulators or transcription factors. Defaults to list(). If input an empty list, then assume all genes are capable of transcriptional regulations. 
-
+        show_conflicts (bool, optional): Whether to show the conflicting cell states for each gene. Defaults to False. 
     Returns:
         dict: A dictionary of feature matrix, gene status label, unlikely activators and unlikely repressors for each gene ready for genetic algorithm optimization. 
     """
@@ -267,8 +268,14 @@ def curate_training_data(state_dict, transition_dict, trajectory_time_change_dic
         
         
         if len(remove_index_list) > 1: 
-            print(temp_gene + " have conflicting states, the below states are deleted")
-            print(list(feature_mat.columns[remove_index_list]))
+            if show_conflicts == True:
+                conflict_states = list(feature_mat.columns[remove_index_list])
+                conflict_states = [x.replace('unstable', 'transitional') for x in conflict_states]
+                conflict_states = [x.split("_")[0] + " " + x.split("_")[1] + " cluster in " + x.split("_")[2] + "_" + x.split("_")[3] for x in conflict_states]
+                conflicts_states_str = ', '.join(conflict_states)
+                print('We found conflicting cell states for ' + temp_gene + ". This means activity status profiles for the target gene are different but the regulator profiles are the same in these cell states.")
+                print("The following conflicting cell states are removed during the curation of training data for " + temp_gene + " subnetwork: " )
+                print(conflicts_states_str + '\n')
         
         new_feature_mat = feature_mat.drop(feature_mat.columns[remove_index_list], axis = 1).copy()
         good_index = list(state_meta.loc[new_feature_mat.columns, :]['col_index'])
