@@ -5,6 +5,7 @@ import itertools
 from joblib import Parallel, delayed, cpu_count
 from tqdm_joblib import tqdm_joblib
 from tqdm import tqdm
+import warnings 
 
 def define_states(exp_tab, samp_tab, trajectory_cluster, vector_thresh, cluster_col = 'cluster_id', percent_exp = 0.3):
     """Define the cell state boolean profiles for each of the trajectory. 
@@ -848,8 +849,9 @@ def create_network_ensemble(training_dict, corr_matrix, n_cores = 16, run_parall
         return inferred_network
 
     if n_cores > cpu_count(): 
-        warnings.warn("Maximum number of cores is " + str(cpu_count()))
+        print("Maximum number of cores on this machine is " + str(cpu_count()) + " instead of " + str(n_cores) + " indicated by the user. OneSC will use " + str(cpu_count()) + " cores.")
         n_cores = cpu_count()
+
     if run_parallel == True: 
         with tqdm_joblib(desc="Network inference ensemble (parallelization " + str(cpu_count()) + " cores)", total=len(seeds_combo)) as progress_bar:
             parallel_results = list(
