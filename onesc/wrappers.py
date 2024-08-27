@@ -30,6 +30,9 @@ def construct_cluster_graph_adata(adata, **kwargs):
     Returns:
         networkx.DiGraph: A networkx directed graph object summarizing the transitional relationship between cell states. 
     """
+    for clusters in np.unique(adata.obs[kwargs.get('cluster_col')]): 
+        assert "_" not in clusters, "Cluster/cell type names may not contain underscores (_). Offending cluster in AnnData: " + clusters + ". Please change it in adata, cellstate_graph and start_end_clusters."
+
     sampTab = adata.obs.copy()
     train_exp = adata.to_df().T.copy()
     return construct_cluster_network(train_exp, sampTab, **kwargs)
@@ -274,6 +277,9 @@ def infer_grn(
     initial_clusters = start_end_clusters['start']
     terminal_clusters = start_end_clusters['end']
     
+    for clusters in np.unique(adata.obs[cluster_col]): 
+        assert "_" not in clusters, "Cluster/cell type names may not contain underscores (_). Offending cluster in AnnData: " + clusters + ". Please change it in adata, cellstate_graph and start_end_clusters."
+
     print("Preparing states and data for GA ...")
     lineage_cluster = extract_trajectory(cellstate_graph, initial_clusters, terminal_clusters)
     vector_thresh = find_threshold_vector(train_exp, samp_tab, cluster_col = cluster_col, cutoff_percentage = cutoff_percentage)

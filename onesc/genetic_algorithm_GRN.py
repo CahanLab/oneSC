@@ -60,7 +60,6 @@ def define_transition(state_dict):
         transition_dict[trajectory] = temp_df
     return transition_dict
 
-
 def curate_training_data(state_dict, transition_dict, trajectory_time_change_dict, samp_tab, cluster_id = "cluster_id", pt_id = "dpt_pseudotime",act_tolerance = 0.01, selected_regulators = list(), show_conflicts = False):
     """Compile training data before running with genetic algorithm. This curates the expression states of the gene (as label) and the expression states (as features) of all transcription regulators at different cell states. 
        In the event when the gene and a transcription regulator both change at the same cell staste, pseudotime ordering at which the gene and transcription regulator change will be considered when curating gene expression states (label) and transcription regulators expression states (features). 
