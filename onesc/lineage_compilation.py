@@ -179,6 +179,9 @@ def construct_cluster_network(train_exp, sampTab, initial_clusters, terminal_clu
     Returns:
         networkx.DiGraph: A networkx directed graph object summarizing the transitional relationship between cell states. 
     """
+    for clusters in np.unique(sampTab[cluster_col]): 
+        assert "_" not in clusters, "Cluster/cell type names may not contain underscores (_). Offending cluster in AnnData: " + clusters + ". Please change it in adata, cellstate_graph and start_end_clusters."
+
     pt_list = list()
     cluster_list = list()
     mean_exp = pd.DataFrame()

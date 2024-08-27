@@ -79,6 +79,9 @@ def curate_training_data(state_dict, transition_dict, trajectory_time_change_dic
     Returns:
         dict: A dictionary of feature matrix, gene status label, unlikely activators and unlikely repressors for each gene ready for genetic algorithm optimization. 
     """
+    for clusters in np.unique(samp_tab[cluster_id]): 
+        assert "_" not in clusters, "Cluster/cell type names may not contain underscores (_). Offending cluster in AnnData: " + clusters + ". Please change it in adata, cellstate_graph and start_end_clusters."
+
     all_genes = transition_dict['trajectory_0'].index
 
     def extract_steady_states(state_df, target_gene, trajectory_name):
