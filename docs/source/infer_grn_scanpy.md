@@ -83,3 +83,8 @@ onesc.plot_grn(grn_ig, layout_method='fr',community_first=True)
 ![CMP GRN](./_static/images/CMP_grn.png)
 
 The purple edges represent positive regulatory relationships (i.e. TF promotes expression of TG), whereas grey edges represent inhibitory relationships. Nodes have been colored by a community detection algorithm applied to the GRN.
+
+### Approximate runtime for different machines 
+To provide users with an estimate of the time required for inferring myeloid networks, we run GRN inference on various AWS EC2 instances (c5.xlarge, c5.2xlarge, c5.4xlarge) and on personal computers running Mac and Windows. The image below hopefully provides some help. 
+
+![Runtime Test](./_static/images/runtime_plot.png)

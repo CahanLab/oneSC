@@ -110,3 +110,8 @@ print(inferred_grn)
 #7    Irf8  Cebpe    -
 # ...
 ```
+
+### Approximate runtime for different machines 
+To provide users with an estimate of the time required for inferring myeloid networks, we run GRN inference on various AWS EC2 instances (c5.xlarge, c5.2xlarge, c5.4xlarge) and on personal computers running Mac and Windows. The image below hopefully provides some help. 
+
+![Runtime Test](./_static/images/runtime_plot.png)
