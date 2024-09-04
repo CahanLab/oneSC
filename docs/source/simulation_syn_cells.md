@@ -1,7 +1,7 @@
 # Simulation of Synthetic Cells 
 
 ### Building OneSC simulator 
-After the inference of GRNs from [previous step](infer_grn.md), we can perform simulations using the GRN as a backbone. First construct a OneSC simulator object using GRN. 
+After the inference of GRNs from [previous step](infer_grn.md), we can perform simulations using the GRN as a backbone. First construct a OneSC simulator object using GRN. You can download the inferred GRN from previous step [here](https://cnobjects.s3.amazonaws.com/OneSC/OneSC_network.csv)
 ```
 # load in the inferred GRNs 
 inferred_grn = pd.read_csv("OneSC_network.csv", sep = ',', index_col=0)
@@ -37,7 +37,7 @@ print(sim_exp)
 #Gata1    0     0.02     0.02     0.02     0.02     0.02     0.02     0.02   
 ...
 ```
-Alternatively, we can use the wrapper function to simulate the expression profiles in parallel. This function has been tested on MacOS (m1 chip) and Ubuntu, it may or may not work on Windows.
+Alternatively, we can use the wrapper function to simulate the expression profiles in parallel. This function has been tested on MacOS (m1 chip) and Ubuntu (AWS EC2), it may or may not work on Windows.
 
 The code down below will create a output directory called sim_profiles where the simulations are saved.
 ```
@@ -45,7 +45,7 @@ onesc.simulate_parallel(MySimulator, init_exp_dict, 'Myeloid_network', n_cores =
 ```
 
 ### Visualization of Simulated Cells 
-After we performed 100 simulations using the onesc.simulate_parallel function, if successful, we should be able to see the inidividual simulated expression profiles in the sim_profiles folder.
+After we performed 100 simulations using the onesc.simulate_parallel function, if successful, we should be able to see the individual simulated expression profiles in the sim_profiles folder.
 ```
 save_folder_path = 'sim_profiles'
 # list all the files in sim_profiles folder 
@@ -53,7 +53,7 @@ sim_files = os.listdir(save_folder_path)
 print(sim_files)
 # ['89_simulated_exp.csv', '59_simulated_exp.csv', '17_simulated_exp.csv', '71_simulated_exp.csv', '23_simulated_exp.csv', '45_simulated_exp.csv', '95_simulated_exp.csv', '12_simulated_exp.csv', ...]
 ```
-Then we can load in all simulation results, sample them (every 50 simulation step to reduce computation) and the concanetate them into a giant dataframe.
+Then we can load in all simulation results, sample them (every 50 simulation step to reduce computation) and the concatenate them into a giant dataframe.
 ```
 big_sim_df = pd.DataFrame()
 for sim_file in sim_files: 
@@ -77,7 +77,7 @@ plt.show()
 ### Perturbation Simulations 
 One of the main functions of OneSC is the capability of running in-silico perturbations. Here we are going to demonstrate how to perform Cepbe in-silico knockout.
 
-We first construct a dictionary indicating which gene or genes that we want to pertrub and how much do we perturb at each simulation step. The default maximum expression value is set at 2 and the default minimum expression value is at 0. Therefore if we want to perform in-silico overexpression, we would use values > 0 (i.e 1) and if we want to perform in-silico knockout, we would use values < 0 (i.e -1).
+We first construct a dictionary indicating which gene or genes that we want to perturb and how much do we perturb at each simulation step. The default maximum expression value is set at 2 and the default minimum expression value is at 0. Therefore if we want to perform in-silico overexpression, we would use values > 0 (such as 1) and if we want to perform in-silico knockout, we would use values < 0 (such as -1).
 ```
 perturb_dict = dict()
 # manually subtract -1 on every simulation step to simulate knockout

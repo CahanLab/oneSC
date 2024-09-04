@@ -1,7 +1,7 @@
 # Simulation of Synthetic Cells (AnnData Object)
 
 ### Building OneSC simulator 
-After the inference of GRNs from [previous step](infer_grn_scanpy.md), we can perform simulations using the GRN as a backbone. For all simulations, we need to define the start state. In our case, we know that cells start in the CMP state. To determine the Boolean state of genes in the CMP state, we subset the adata to those cells and then apply thresholds on the mean expression and the percent of cells in which the gene is detected:
+After the inference of GRNs from [previous step](infer_grn_scanpy.md), we can perform simulations using the GRN as a backbone. You can download the inferred GRN from previous step [here](https://cnobjects.s3.amazonaws.com/OneSC/OneSC_network.csv). For all simulations, we need to define the start state. In our case, we know that cells start in the CMP state. To determine the Boolean state of genes in the CMP state, we subset the adata to those cells and then apply thresholds on the mean expression and the percent of cells in which the gene is detected:
 ```
 boolean_states_df = onesc.define_boolean_states_anndata(adata, cluster_col = 'cell_types')
 xstates = boolean_states_df['CMP'] * 2
