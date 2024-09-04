@@ -784,7 +784,7 @@ def create_network(training_dict, corr_matrix, ideal_edges = 2, num_generations 
             new_edges_df = pd.concat([new_edges_df, temp_edge])
 
         total_network = pd.concat([total_network, new_edges_df])
-
+        total_network = total_network.reset_index(drop=True)
     return total_network
 
 def create_network_ensemble(training_dict, corr_matrix, n_cores = 16, run_parallel = True, ideal_edges = 2, num_generations = 1000, max_iter = 10, num_parents_mating = 4, sol_per_pop = 10, reduce_auto_reg = True, mutation_percent_genes = 20, GA_seed_list = [1, 2, 3, 4], init_pop_seed_list = [21, 22, 23, 24]):
@@ -864,7 +864,7 @@ def create_network_ensemble(training_dict, corr_matrix, n_cores = 16, run_parall
         return max_network
 
     majority_network = get_majority_network(parallel_results)
-
+    majority_network = majority_network.reset_index(drop=True)
     return [majority_network, parallel_results]
 
 def calc_corr(train_exp):
