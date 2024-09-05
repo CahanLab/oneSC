@@ -117,11 +117,7 @@ To provide users with an estimate of the time required for inferring myeloid net
 ![Runtime Test](./_static/images/runtime_plot.png)
 
 ### Alternate way to find the Boolean thresholds 
-Previously in the tutorial, we used 
-```
-onesc.find_threshold_vector() 
-```
-function to identify the thresholds for Booleanization of the genes. This method identifies the thresholds based on finding the difference between maximum cluster expression and minimum cluster expression. Alternatively, we decised a new method that finds the threshold based on the distribution of non-zero gene expresssion distributions. Users are welcome to explores this approach! 
+Previously in the tutorial, we used *onesc.find_threshold_vector()* function to identify the thresholds for Booleanization of the genes. This method identifies the thresholds based on finding the difference between maximum cluster expression and minimum cluster expression. Alternatively, we decised a new method that finds the threshold based on the distribution of non-zero gene expresssion distributions. Users are welcome to explores this approach! 
 ```
 vector_thresh = percentile_threshold(train_exp, percentile_cut = 0.25)
 ```
