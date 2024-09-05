@@ -267,5 +267,18 @@ def extract_trajectory(clusters_G, initial_clusters, terminal_clusters):
             i = i + 1
     return clusters_trajectory_dict
 
+def percentile_threshold(train_exp, percentile_cut = 0.25): 
+    """Using percentile to threshold gene expressions
 
+    Args:
+        train_exp (pd.DataFrame): single-cell normalized gene expression profiles. 
+        percentile_cut (float, optional): the percentile to make the threshold. Defaults to 0.25.
+
+    Returns:
+        pd.Series: Series of expression threshold for the genes. 
+    """
+    cutoff_dict = dict()
+    for tmp_gene in train_exp.index: 
+        cutoff_dict[tmp_gene] = np.quantile(train_exp.loc[tmp_gene, :][train_exp.loc[tmp_gene, :] != 0], percentile_cut)
+    return pd.Series(cutoff_dict)
 
