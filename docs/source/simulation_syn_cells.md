@@ -116,3 +116,10 @@ sns.scatterplot(x='UMAP_1', y='UMAP_2', hue='sim_time', data=UMAP_coord)
 plt.show()
 ```
 ![Cebpe-KO simulation (UMAP)](./_static/images/cebpe_ko_UMAP.png)
+
+If we want to perform multiple perturbations, we can add that into the perturb dict, and pass that into the simulation function. 
+```
+perturb_dict = dict()
+perturb_dict['Cepbe'] = -1 
+perturb_dict['Gata2] = 1
+```

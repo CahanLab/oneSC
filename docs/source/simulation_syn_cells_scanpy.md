@@ -90,3 +90,10 @@ We can also directly compare the proportions of cell types across simulations/pe
 pySCN.plot_cell_type_proportions([adHeldOut_rank,ad_wt, ad_cebpa_ko], obs_column = "SCN_class", labels=["HeldOut", "WT","Cebpa_KO"])
 ```
 ![proportion plot](./_static/images/sim_results.png)
+
+If we want to perform multiple perturbations, we can add that into the perturb dict, and pass that into the simulation function. 
+```
+perturb_dict = dict()
+perturb_dict['Cepbe'] = -1 
+perturb_dict['Gata2] = 1
+```
