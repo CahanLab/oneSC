@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import scanpy as sc
 import networkx as nx
-import anndata as ad
+import anndata
 from .genetic_algorithm_GRN import define_states
 from .genetic_algorithm_GRN import define_transition
 from .genetic_algorithm_GRN import curate_training_data
@@ -107,7 +107,6 @@ def plot_state_graph(nx_network, layout = "sugiyama"):
     ig_net.vs["label"] = ig_net.vs["_nx_name"]
     
     return ig.plot(ig_net, **v_style_trajectory)
-
 
 def dataframe_to_igraph(df):
     """
@@ -326,7 +325,7 @@ def simulate_parallel_adata(OneSC_simulator, init_exp_dict, network_name, pertur
         sim_exp = OneSC_simulator.sim_exp.copy()
         sim_steps = sim_exp.columns.tolist()
         sim_exp.columns = ['timestep_' + str(i) for i in sim_steps]
-        adTemp = ad.AnnData(sim_exp.T)
+        adTemp = anndata.AnnData(sim_exp.T)
         adTemp.obs['sim_time'] = sim_steps
         adata_list.append(adTemp)
     pool.map(run_parallel, num_runs_list)
@@ -372,7 +371,7 @@ def sample_and_compile_anndatas(anndata_list, X, time_bin=None, sequential_order
         
         compiled_samples.append(sampled_cells)
     
-    compiled_adata = ad.concat(compiled_samples, axis=0)
+    compiled_adata = anndata.concat(compiled_samples, axis=0)
     compiled_adata.obs_names_make_unique()
 
     return compiled_adata

@@ -2,13 +2,6 @@ import numpy as np
 import pandas as pd
 import itertools
 import networkx as nx
-import anndata
-import scipy as sp
-from .genetic_algorithm_GRN import define_states
-from .genetic_algorithm_GRN import define_transition
-from .genetic_algorithm_GRN import curate_training_data
-from .genetic_algorithm_GRN import calc_corr # can we replace with x.T.corr()?
-from .genetic_algorithm_GRN import create_network_ensemble
 
 def find_gene_change_trajectory(train_exp, train_st, trajectory_cells_dict, cluster_col, pt_col, bool_thresholds, pseudoTime_bin = 0.01, smooth_style = 'mean'):
     """Identify the approximate pseudotime at which the genes change status (on to off or off to on) along each trajectory. 
@@ -180,7 +173,7 @@ def construct_cluster_network(train_exp, sampTab, initial_clusters, terminal_clu
         networkx.DiGraph: A networkx directed graph object summarizing the transitional relationship between cell states. 
     """
     for clusters in np.unique(sampTab[cluster_col]): 
-        assert "_" not in clusters, "Cluster/cell type names may not contain underscores (_). Offending cluster in AnnData: " + clusters + ". Please change it in adata, cellstate_graph and start_end_clusters."
+        assert "_" not in clusters, "Cluster/cell type names may not contain underscores (_). Offending cluster in AnnData or sample table: " + clusters + ". Please change it in adata/sample table, cellstate_graph and start_end_clusters."
 
     pt_list = list()
     cluster_list = list()
