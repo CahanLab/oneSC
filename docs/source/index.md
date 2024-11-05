@@ -9,7 +9,7 @@ We provide two ways of running OneSC (both GRN inference and simulations).
 
 The first way requires users to run all the necessary steps individually leading up to GRN inference and simulations. This allows users to fine-tune parameters and inspect any results generated during the intermediate steps. 
 
-The second way contains wrapper functions that work with popular single-cell data structure,[AnnData](https://anndata.readthedocs.io/en/latest/index.html#). Different from the first method, many of the intermediate steps are now included in the wrapper functions. This method is also compatible with single-cell classification tool [pySCN](https://github.com/CahanLab/PySingleCellNet) for quick classification of the simulated cells. It is more convenient to use, but does not offer the flexiblity for users to fine tune any of the intermediate steps. 
+The second way contains wrapper functions that work with popular single-cell data structure, [AnnData](https://anndata.readthedocs.io/en/latest/index.html#). Different from the first method, many of the intermediate steps are now included in the wrapper functions. This method is also compatible with single-cell classification tool [pySCN](https://github.com/CahanLab/PySingleCellNet) for quick classification of the simulated cells. It is more convenient to use, but does not offer the flexiblity for users to fine tune any of the intermediate steps. 
 
 ```{toctree}
 :maxdepth: 1
