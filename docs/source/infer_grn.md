@@ -31,7 +31,7 @@ end_clusters = ['Erythrocytes', 'Granulocytes', 'Monocytes', 'MK']
 ```
 We can use OneSC to infer the directed state graph using the initial and terminal states and the pseudotime of all the cells:
 ```
-state_path = OneSC.construct_cluster_network(train_exp, samp_tab, initial_clusters = initial_clusters, terminal_clusters = end_clusters, cluster_col = cluster_col, pseudo_col = pt_col)
+state_path = onesc.construct_cluster_network(train_exp, samp_tab, initial_clusters = initial_clusters, terminal_clusters = end_clusters, cluster_col = cluster_col, pseudo_col = pt_col)
 onesc.plot_state_graph(state_path)
 ```
 ![State graph](./_static/images/state_graph_1.png)

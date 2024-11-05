@@ -15,7 +15,7 @@ sim = onesc.OneSC_simulator()
 sim.add_network_compilation(netname, netsim)
 ```
 ### Simulate wildtype trajectory 
-Finally we are ready to simulate expression state trajectories using our GRN. Note that the `simulate_parallel_adata` function has been tested on MacOS (m1 chip) and Ubuntu, it may or may not work on Windows. 
+Finally we are ready to simulate expression state trajectories using our GRN. 
 
 - OneSC_simulator: the OneSC simulator object to use. 
 - initial_exp_dict (dict): dictionary of initial state values.

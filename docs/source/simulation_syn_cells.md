@@ -40,7 +40,7 @@ print(sim_exp)
 ...
 ```
 
-Alternatively, we can use the wrapper function to simulate the expression profiles in parallel. This function has been tested on MacOS (m1 chip) and Ubuntu (AWS EC2), it may or may not work on Windows.
+Alternatively, we can use the wrapper function to simulate the expression profiles in parallel.
 
 The code down below will create an output directory called sim_profiles where the simulated expression profiles will be saved.
 
@@ -88,21 +88,21 @@ We first construct a dictionary indicating which gene or genes that we want to p
 ```
 perturb_dict = dict()
 # manually subtract -1 on every simulation step to simulate knockout
-perturb_dict['Cepbe'] = -1 
+perturb_dict['Cebpe'] = -1 
 ```
 We then pass the perturbation dictionary as a parameter in ```onesc.simulate_exp``` function. Here is how we do it to run one single simulation.
 ```
 rnd_seed = 1 # set the random seed to be reproducible 
 MySimulator.simulate_exp(init_exp_dict, 'Myeloid_network', perturb_dict, num_sim = 1800, t_interval = 0.1, noise_amp = 0.5, random_seed = rnd_seed)
-sim_exp = temp_simulator.sim_exp.copy()
+sim_exp = MySimulator.sim_exp.copy()
 ```
 We can also pass the perturb dictionary as a parameter in ```onesc.simulate_parallel``` function to run in-silico perturbation simulations in parallel.
 ```
-onesc.simulate_parallel(MySimulator, init_exp_dict, 'Myeloid_network', perturb_dict = perturb_dict, n_cores = 10, output_dir = "sim_profiles_CepbeKO", num_runs = 100, num_sim = 1800, t_interval = 0.1, noise_amp = 0.5)
+onesc.simulate_parallel(MySimulator, init_exp_dict, 'Myeloid_network', perturb_dict = perturb_dict, n_cores = 10, output_dir = "sim_profiles_CebpeKO", num_runs = 100, num_sim = 1800, t_interval = 0.1, noise_amp = 0.5)
 ```
 Visualize the results in UMAP
 ```
-save_folder_path = 'sim_profiles_CepbeKO'
+save_folder_path = 'sim_profiles_CebpeKO'
 sim_files = os.listdir(save_folder_path)
 print(sim_files)
 
@@ -127,6 +127,6 @@ plt.show()
 If we want to perform multiple perturbations, we can add that into the perturb dict, and pass that into the simulation function. 
 ```
 perturb_dict = dict()
-perturb_dict['Cepbe'] = -1 
+perturb_dict['Cebpe'] = -1 
 perturb_dict['Gata2] = 1
 ```
