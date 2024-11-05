@@ -11,7 +11,8 @@ In the conda environment, you can install package via
 pip install git+https://github.com/CahanLab/oneSC.git
 ```
 
-### Note - Additional Installations
+**Note - Additional Installations**
+
 To use `pip install git` you may need to install git first.
 ```
 conda install anaconda::git
