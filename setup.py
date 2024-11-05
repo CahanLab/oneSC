@@ -5,10 +5,10 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="onesc", 
-    version="0.1.1",
+    version="0.2.0",
     author="Dan Peng",
     author_email="dpeng5@jhu.edu",
-    description="This is a prototype for OneSC",
+    description="A computational toool to infer and simulate gene regulatory networks.",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="",
