@@ -1,7 +1,7 @@
 # Simulation of Synthetic Cells (AnnData Object)
 
 ### Building OneSC simulator 
-After the inference of GRNs from [previous step](infer_grn_scanpy.md), we can perform simulations using the GRN as a backbone. You can download the inferred GRN from previous step [here](https://cnobjects.s3.amazonaws.com/OneSC/OneSC_network.csv). For all simulations, we need to define the start state. In our case, we know that cells start in the CMP state. To determine the Boolean state of genes in the CMP state, we subset the adata to those cells and then apply thresholds on the mean expression and the percent of cells in which the gene is detected:
+After the inference of GRNs from [previous step](infer_grn_scanpy.md), we can perform simulations using the GRN as a backbone. You can download the inferred GRN from previous step [here](https://cnobjects.s3.amazonaws.com/OneSC/OneSC_network.csv). For all simulations, we need to define the initial state. In our case, we know that cells start in the CMP state. To determine the Boolean state of genes in the CMP state, we subset the adata to those cells and then apply thresholds on the mean expression and the percent of cells in which the gene is detected:
 ```
 boolean_states_df = onesc.define_boolean_states_anndata(adata, cluster_col = 'cell_types')
 xstates = boolean_states_df['CMP'] * 2
@@ -17,9 +17,9 @@ sim.add_network_compilation(netname, netsim)
 ### Simulate wildtype trajectory 
 Finally we are ready to simulate expression state trajectories using our GRN. Note that the `simulate_parallel_adata` function has been tested on MacOS (m1 chip) and Ubuntu, it may or may not work on Windows. 
 
-- OneSC_simulator: exactly that, the OneSC simulator object to use. 
+- OneSC_simulator: the OneSC simulator object to use. 
 - initial_exp_dict (dict): dictionary of initial state values.
-- initial_subnet (str): the name of the gene regulatory fitted network structure that the user want to use for simulation. 
+- network_name (str): the name of the fitted gene regulatory network structure that the user want to use for simulation. 
 - perturb_dict (dict, optional): a dictionary with the key of gene name and value indicating the in silico perturbation. If the user want to perform overexpression, then set the value between 0 and 2. If the user want to perform knockdown, then set the value between 0 and -2. Defaults to dict().
 - num_runs (int, optional): number of simulations to run. Defaults to 10.
 - n_cores (int, optional): number of cores for parallel computing. Defaults to 2.
@@ -44,7 +44,7 @@ pySCN.rank_classify(adHeldOut_rank, clf)
 pySCN.heatmap_scores(adHeldOut_rank, groupby='SCN_class')
 ```
 ![pySCN heatmap](./_static/images/pyscn_heatmap.png)
-Note: the function `train_rank_classifier()` ranks transforms training and query data instead of TSP. Be forewarned that it is likely to be slow if applied to adata objects with thousands of genes. 
+Note: the function `train_rank_classifier()` ranks transforms training and query data instead of TSP. Be forewarned that it is likely to be slow if applied to adata objects with a lot of genes. 
 
 ### Classify Simulated Cells 
 Let's look at the transcriptomic states over sim_time for one simulated trajectory. We will classify the cells first, and then visualize
@@ -72,7 +72,7 @@ pySCN.heatmap_scores(ad_wt, groupby = 'SCN_class')
 ![pySCN heatmap of final stages](./_static/images/scn_hm_wt.png)
 
 ### Simulate knockout trajectory 
-Now, let's simulate a trajectory of a cell in which Cebpa is knocked out
+Now, let's simulate trajectories of cells in which *Cebpa* is knocked out
 ```
 perturb_dict = dict()
 perturb_dict['Cebpa'] = -1 

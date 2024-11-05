@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 import os
 ```
 
-Load in the training data. Note that the sample_tab.csv includes cell type annotation and precomputed pseudotime metadata in the column 'cell_types' and column 'dpt_pseudotime' (pseudotime should scaled to be between 0 and 1), respectively. 
+Load in the training data. Note that the sample_tab.csv includes cell type annotation and precomputed pseudotime in column 'cell_types' and column 'dpt_pseudotime' (pseudotime should scaled to be between 0 and 1), respectively. 
 ```
 train_exp = pd.read_csv("train_exp.csv", index_col = 0)
 samp_tab = pd.read_csv("samp_tab.csv", index_col = 0)
@@ -23,7 +23,7 @@ cluster_col = 'cell_types'
 ```
 *Important notice*: Make sure there are no underscore "_" in any of the cell cluster annotations. 
 ### GRN inference 
-There are a few steps that needs to be taken before we could use OneSC to infer GRNs. The first step in reconstructing or inferring a GRN with OneSC is to determine the directed state graph of the cells. In other words, what is the sequence of distinct states that a cell passes through from the start to a terminal state? O eSC requires that the user provide cell state annotations. Typically these are in the form of cell clusters or cell type annotations. OneSC also requires users to specify the initial cell states and the end states. In this data, the cell states have already been provided in 'cell_types' column in 'samp_tab'. Now, we will specify the initial cell states and the end states:
+There are a few necessary steps before we could use OneSC to infer GRNs. The first step in inferring a GRN with OneSC is to determine the directed cell states transition graph of the cells. In other words, what is the sequence of distinct states that cells pass through from the start to a terminal state? OneSC also requires users to specify the initial cell state and the terminal states. In this data, the cell states have already been provided in 'cell_types' column in 'samp_tab'. Now, we will specify the initial cell states and the end states:
 
 ```
 initial_clusters = ['CMP']
@@ -36,18 +36,19 @@ onesc.plot_state_graph(state_path)
 ```
 ![State graph](./_static/images/state_graph_1.png)
 
-However, we can also manually create a directed state graph:
+However, we can also manually create a directed state graph if we know the cell states transition from prior knowledge:
 
 ```
 edge_list = [("CMP", "MK"), ("CMP", "MEP"), ("MEP", "Erythrocytes"), ("CMP", "GMP"), ("GMP", "Granulocytes"), ("GMP", "Monocytes")]
 state_path = nx.DiGraph(edge_list)
 ```
 
-Next we identify the trajectories in the single-cell data from the cell state transition graph. This helps us identify the cell states along individual trajectories in the single-cell data. 
+Next we identify the individual linear trajectories in the single-cell data from the cell states transition graph. This helps us find the cell states in each individual trajectory. 
 ```
 lineage_cluster = onesc.extract_trajectory(state_path,initial_clusters, end_clusters)
 ```
-We find the expression thresholds to binarize the expressions into activity status and identify the pseudotime at which genes change activity status across different trajectories. The orders at which different genes change activity status help us refine the casual relationships between regulators and regulons during the GRN inference step. 
+
+Next we find the expression thresholds to binarize gene expressions and identify the pseudotime at which genes change activity status across different trajectories. The orders at which different genes change activity status help us refine the casual relationships between regulators and regulons during the GRN inference step. 
 ```
 # find the boolean threshold for each gene 
 vector_thresh = onesc.find_threshold_vector(train_exp, samp_tab, cluster_col = "cell_types", cutoff_percentage=0.4)
@@ -55,6 +56,7 @@ vector_thresh = onesc.find_threshold_vector(train_exp, samp_tab, cluster_col = "
 # identify the finer time steps at which genes change along individual trajectory 
 lineage_time_change_dict = onesc.find_gene_change_trajectory(train_exp, samp_tab, lineage_cluster, cluster_col, pt_col, vector_thresh, pseudoTime_bin=0.01) 
 ```
+
 Next we generate the states activity profiles and the transition profiles for each cell state. 
 ```
 # define boolean states profiles for each cell cluster 
@@ -67,7 +69,8 @@ pickle.dump(state_dict, open("state_dict.pickle", "wb"))
 # define transition profiles for each cell clusters
 transition_dict = onesc.define_transition(state_dict)
 ```
-Lastly we curate all the data required for training a GRN using genetic algorithm optimization. In the training data for each gene, there are the activity status profile for the target gene across different cell states acting as labels and the corresponding activity status profile of all potential regulators across different cell states acting as features. The goal for the genetic algorithm is to optimize a subnetwork configuration for each target gene and its regulators such that upon Boolean simulations using the activity status of its regulators, there is a maximum level of agreement between the simulated activity status for the target gene and the observed activity status for the target gene across cell states. During the construction of the training data, OneSC uses the pseudotime ordering at which genes change activity (defined earlier) to finetune the potential regulators activity status profiles such that it most accurately reflect ordering at which genes change activity status during cell state transition. We also calculated the Pearson correlation between genes as additional information during GRN reconstruction. 
+
+Lastly we curate all the data required for inferring a GRN using genetic algorithm. In the training data for each gene, there are the activity status profile for the target gene across different cell states acting as labels and the corresponding activity status profile of all potential regulators across different cell states. The goal for the genetic algorithm is to optimize a subnetwork configuration for each target gene and its regulators such that upon Boolean simulation using the activity status of its regulators, there is a maximum level of agreement between the simulated activity status and the observed activity status for the target gene across cell states. During the construction of the training data, OneSC uses the pseudotime ordering at which genes change activity (defined earlier) to finetune the potential regulators activity status profiles such that it most accurately reflect the orderings at which genes change activity status during cell state transition. We also calculated the Pearson correlation between genes as additional information during GRN reconstruction. 
 ```
 # curate the training data for GRN inference for each gene 
 training_data = onesc.curate_training_data(state_dict, transition_dict, lineage_time_change_dict, samp_tab, cluster_id = cluster_col, pt_id = pt_col,act_tolerance = 0.04)
@@ -75,7 +78,8 @@ training_data = onesc.curate_training_data(state_dict, transition_dict, lineage_
 # calculate the pearson correlation between genes. This adds more information during the inference step. 
 corr_mat = onesc.calc_corr(train_exp)
 ```
-Then we run the GRN inference using genetic algorithm. Inherently, there is stochasticity in genetic algorithm such that different inital populations and different optimization can affect the outcomes. To ensure our results are robust to variations in initial populations or optimization steps, OneSC will generate an ensemble of GRNs acorss different seed combinations for initial populations and optimization steps. Then OneSC will generate a final GRN using the majority network configurations in the ensemble. 
+
+Inherently, there is stochasticity in genetic algorithm such that different inital populations and different optimization can affect the outcomes. To ensure our results are robust to variations in the initial populations or the optimization processes, OneSC will generate an ensemble of GRNs acorss different seed combinations for initial populations and optimization process and generate a final GRN using the majority network configurations in the ensemble. 
 
 To increase the number of networks inferred in the ensemble, please add more items to the *GA_seed_list* or *init_pop_seed*. 
 ```
@@ -85,7 +89,7 @@ grn_ensemble = onesc.create_network_ensemble(training_data,
                                             corr_mat, 
                                             ideal_edges = ideal_edge_num, 
                                             num_generations = 300, 
-                                            max_iter = 30, --+
+                                            max_iter = 30,
                                             num_parents_mating = 4, 
                                             sol_per_pop = 30, 
                                             reduce_auto_reg = True, 
@@ -95,6 +99,7 @@ grn_ensemble = onesc.create_network_ensemble(training_data,
 inferred_grn = grn_ensemble[0] # the first item in the list is the majority voted network
 inferred_grn.to_csv("OneSC_network.csv")
 ```
+
 You can print the inferred GRN out. It should look similar to something below. 
 ```
 print(inferred_grn)
@@ -112,12 +117,12 @@ print(inferred_grn)
 ```
 
 ### Approximate runtime for different machines 
-To provide users with an estimate of the time required for inferring myeloid networks, we run GRN inference on various AWS EC2 instances (c5.xlarge, c5.2xlarge, c5.4xlarge) and on personal computers running Mac and Windows. The image below hopefully provides some guidance. 
+To provide users with an estimate of the time required for inferring the myeloid network, we ran GRN inference on various AWS EC2 instances (c5.xlarge, c5.2xlarge, c5.4xlarge) and on personal computers running Mac and Windows using different CPUs. The plot below hopefully provides some guidance. 
 
 ![Runtime Test](./_static/images/runtime_plot.png)
 
 ### Alternate way to find the Boolean thresholds 
-Previously in the tutorial, we used *onesc.find_threshold_vector()* function to identify the thresholds for Booleanization of the genes. This method identifies the thresholds based on finding the difference between maximum cluster expression and minimum cluster expression. Alternatively, we decised a new method that finds the threshold based on the distribution of non-zero gene expresssion distributions. Users are welcome to explores this approach! 
+Previously in the tutorial, we used *onesc.find_threshold_vector()* function to identify the thresholds for Booleanization of the genes. This method identifies the thresholds based on finding the difference between maximum cluster expression and minimum cluster expression. Alternatively, we devised a new method that finds the threshold based on the non-zero gene expresssion distributions. Users are welcome to explores this approach! 
 ```
 vector_thresh = percentile_threshold(train_exp, percentile_cut = 0.25)
 ```

@@ -1,5 +1,5 @@
 # Inference of functional transcription factors network (AnnData Object)
-In this tutorial, we are going to show how to run OneSC using AnnData object. We are going to use the mouse myeloid single-cell data from [Paul et al, 2015](https://pubmed.ncbi.nlm.nih.gov/26627738/). We have refined the annotation of these 2,670 cells. Please download the [h5ad file containing the expression values of 12 core transcription factors in these cells here](https://cnobjects.s3.amazonaws.com/OneSC/Paul_2015/Paul15_040824_filtered.h5ad). Note that this annData object includes cell type annotation and precomputed pseudotime metadata in adata.obs['cell_types'] and adata.obs['dpt_pseudotime'] (pseudotime should scaled to be between 0 and 1), respectively. Part of this tutorial will use the package [pySingleCellNet](https://pysinglecellnet.readthedocs.io/en/latest/).  
+In this tutorial, we are going to show how to run OneSC from AnnData object. We are going to use the mouse myeloid single-cell data from [Paul et al, 2015](https://pubmed.ncbi.nlm.nih.gov/26627738/). We have refined the annotation of these 2,670 cells. Please download the h5ad file containing the expression values of 12 core transcription factors in these cells [here](https://cnobjects.s3.amazonaws.com/OneSC/Paul_2015/Paul15_040824_filtered.h5ad). Note that this annData object includes cell type annotation and precomputed pseudotime metadata in adata.obs['cell_types'] and adata.obs['dpt_pseudotime'] (pseudotime should scaled to be between 0 and 1), respectively. Part of this tutorial will use the package [pySingleCellNet](https://pysinglecellnet.readthedocs.io/en/latest/).  
 
 ### Setup
 Launch Jupyter or your Python interpreter. Import the required packages and functions.
@@ -29,13 +29,13 @@ adata = sc.read_h5ad("Paul15_040824.h5ad")
 *Important notice*: Make sure there are no underscore "_" in any of the cell cluster annotations. 
 
 ### GRN inference 
-The first step in reconstructing or inferring a GRN with oneSC is to determine the directed state graph of the cells. In other words, what is the sequence of distinct states that a cell passes through from the start to a terminal state? oneSC requires that the user provide cell state annotations. Typically these are in the form of cell clusters or cell type annotations. oneSC also requires that the user specify the initial cell states and the end states. In our data, the cell states have already been provided in  .obs['cell_types']. Now, we will specify the initial cell states and the end states:
+The first step in reconstructing or inferring a GRN with oneSC is to determine the directed cell state transition graph of the cells. In other words, what is the sequence of distinct states that cells pass through from the start to a terminal state? OneSC requires that the user provide cell state annotations. Typically these are in the form of cell clusters or cell type annotations. OneSC also requires that the user specify the initial cell states and the end states. In our data, the cell states have already been provided in  .obs['cell_types']. Now, we will specify the initial cell states and the end states:
 ```
 initial_clusters = ['CMP']
 end_clusters = ['Erythrocytes', 'Granulocytes', 'Monocytes', 'MK']
 ```
 
-We can use oneSC to infer the directed state graph since it knows the initial and terminal states and the pseudotime of all cells:
+We can use OneSC to infer the directed cell states transition graph since it knows the initial and terminal states and the pseudotime of all cells:
 ```
 state_path = onesc.construct_cluster_graph_adata(adata, initial_clusters = initial_clusters, terminal_clusters = end_clusters, cluster_col = "cell_types", pseudo_col = "dpt_pseudotime")
 
@@ -51,7 +51,7 @@ H = nx.DiGraph(edge_list)
 onesc.plot_state_graph(H)
 ```
 
-Now we are ready to infer the GRN. There are quite a few parameters to `infer_grn()`. Listed below are required parameters, and those that you can adjust to optimize runtime on your platform. In the example below, we have selected parameter values appropriate for this data.
+Now we are ready to infer the GRN. There are quite a few parameters to `infer_grn()`. Listed below are required parameters, and those that you can adjust to optimize runtime and performance on your platform. In the example below, we have selected parameter values appropriate for this data.
 
 - cellstate_graph: this is just the state graph we made earlier, H.
 - start_end_clusters: a dict of 'start', and 'end' cell states.
@@ -85,6 +85,6 @@ onesc.plot_grn(grn_ig, layout_method='fr',community_first=True)
 The purple edges represent positive regulatory relationships (i.e. TF promotes expression of TG), whereas grey edges represent inhibitory relationships. Nodes have been colored by a community detection algorithm applied to the GRN.
 
 ### Approximate runtime for different machines 
-To provide users with an estimate of the time required for inferring myeloid networks, we run GRN inference on various AWS EC2 instances (c5.xlarge, c5.2xlarge, c5.4xlarge) and on personal computers running Mac and Windows. The image below hopefully provides some help. 
+To provide users with an estimate of the time required for inferring the myeloid network, we ran GRN inference on various AWS EC2 instances (c5.xlarge, c5.2xlarge, c5.4xlarge) and on personal computers running Mac and Windows using different CPUs. The plot below hopefully provides some guidance. 
 
 ![Runtime Test](./_static/images/runtime_plot.png)
