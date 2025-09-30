@@ -6,7 +6,7 @@ OneSC is a 2-in-1 computational tool that does two things:
 
 2. Simulate synthetic single-cell expression profiles that mimic cell state transitions using the core transcription factors circuit as regulatory backbones
 
-You can read more about it in our [preprint](https://www.biorxiv.org/content/10.1101/2024.05.31.596831v1). 
+You can read more about it in our [paper](https://academic.oup.com/bioinformatics/article/40/12/btae703/7906491). 
 
 OneSC documentation is available through the link below.
 
