@@ -35,13 +35,24 @@ simlist_wt = onesc.simulate_parallel_adata(sim, xstates, netname, n_cores = 8, n
 ### Setup PySCN for classification 
 We will use PySCN to annotate the states of the simulated cells. Train the classifer now:
 ```
-adTrain_rank, adHeldOut_rank = pySCN.splitCommonAnnData(adata, ncells=50,dLevel="cell_types")
-clf = pySCN.train_rank_classifier(adTrain_rank, dLevel="cell_types")
+adata.var['highly_variable'] = True
+
+tids, vids = pySCN.ut.split_adata_indices(adata, n_cells=50,groupby="cell_types")
+adTrain = adata[tids].copy()
+adHO = adata[vids].copy()
+
+groupby="cell_types"
+n_rand = 50
+nTopGenes = 6
+nTopGenePairs = 8
+n_comps = 3
+
+clf = pySCN.tl.train_classifier(adTrain, groupby, nRand = n_rand, nTopGenes = nTopGenes, nTopGenePairs = nTopGenePairs, n_comps = n_comps)
 ```
 Classify held out data:
 ```
-pySCN.rank_classify(adHeldOut_rank, clf)
-pySCN.heatmap_scores(adHeldOut_rank, groupby='SCN_class')
+pySCN.tl.classify_anndata(adHO, clf)
+pySCN.pl.heatmap_scores(adHO, groupby='SCN_class_argmax')
 ```
 ![pySCN heatmap](./_static/images/pyscn_heatmap.png)
 Note: the function `train_rank_classifier()` ranks transforms training and query data instead of TSP. Be forewarned that it is likely to be slow if applied to adata objects with a lot of genes. 
@@ -50,7 +61,7 @@ Note: the function `train_rank_classifier()` ranks transforms training and query
 Let's look at the transcriptomic states over sim_time for one simulated trajectory. We will classify the cells first, and then visualize
 ```
 ad_sim1 = simlist_wt[0].copy()
-pySCN.rank_classify(ad_sim1, clf)
+pySCN.tl.classify_anndata(ad_sim1, clf)
 
 # a hack because sc.pl.heatmap requires a 'groupby', so groupby simulation time bin
 tmp_obs = ad_sim1.obs.copy()
@@ -60,14 +71,14 @@ labels = [f"{int(bins[i]) + 1}-{int(bins[i+1])}" for i in range(len(bins)-1)]
 tmp_obs['sTime_bin'] = pd.cut(tmp_obs['sim_time'], bins=bins, labels=labels)
 ad_sim1.obs = tmp_obs
 
-pySCN.heatmap_scores(ad_sim1, groupby = 'sTime_bin')
+pySCN.pl.heatmap_scores(ad_sim1, groupby = 'sTime_bin')
 ```
 ![pySCN heatmap one wt](./_static/images/scn_hm_one_wt_trajectory.png)
 Instead of looking the trajectory of a single cell, we can sample the end stages of all simulations:
 ```
 ad_wt = onesc.sample_and_compile_anndatas(simlist_wt, X=50, time_bin=(80, 100), sequential_order_column='sim_time')
-pySCN.rank_classify(ad_wt, clf)
-pySCN.heatmap_scores(ad_wt, groupby = 'SCN_class')
+pySCN.tl.classify_anndata(ad_wt, clf)
+pySCN.pl.heatmap_scores(ad_wt, groupby = 'SCN_class_argmax')
 ```
 ![pySCN heatmap of final stages](./_static/images/scn_hm_wt.png)
 
@@ -81,13 +92,13 @@ simlist_cebpa_ko = onesc.simulate_parallel_adata(sim, xstates, 'CMPdiff', pertur
 Now fetch the simulated cells, sampling from the end stages, classify them, and visualize the results.
 ```
 ad_cebpa_ko = onesc.sample_and_compile_anndatas(simlist_cebpa_ko, X=50, time_bin=(80, 100), sequential_order_column='sim_time')
-pySCN.rank_classify(ad_cebpa_ko, clf)
-pySCN.heatmap_scores(ad_cebpa_ko, groupby = 'SCN_class')
+pySCN.tl.classify_anndata(ad_cebpa_ko, clf)
+pySCN.pl.heatmap_scores(ad_cebpa_ko, groupby = 'SCN_class_argmax')
 ```
 ![pySCN KO heatmap](./_static/images/scn_hm_cepba_ko.png)
 We can also directly compare the proportions of cell types across simulations/perturbations as follows:
 ```
-pySCN.plot_cell_type_proportions([adHeldOut_rank,ad_wt, ad_cebpa_ko], obs_column = "SCN_class", labels=["HeldOut", "WT","Cebpa_KO"])
+pySCN.pl.stackedbar_composition_list([adHO,ad_wt, ad_cebpa_ko], obs_column = "SCN_class_argmax", labels=["HeldOut","Wt", "Cebpa_KO"], color_dict = adHO.uns['SCN_class_argmax_colors'])
 ```
 ![proportion plot](./_static/images/sim_results.png)
 

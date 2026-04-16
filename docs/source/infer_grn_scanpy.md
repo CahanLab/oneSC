@@ -24,7 +24,7 @@ ig.config['plotting.backend'] = 'matplotlib'
 
 Load in the training data:
 ```
-adata = sc.read_h5ad("Paul15_040824.h5ad")
+adata = sc.read_h5ad("Paul15_040824_filtered.h5ad")
 ```
 *Important notice*: Make sure there are no underscore "_" in any of the cell cluster annotations. 
 

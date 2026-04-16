@@ -472,10 +472,10 @@ def GA_fit_single_gene(training_dict, target_gene, corr_matrix, ideal_edges = 2,
             if solution[temp_index] == 0:
                 continue
             else:
-                if check_direction_agreement(solution[temp_index], corr_col[temp_index]) == True:
-                    fitness_score = fitness_score + (np.abs(corr_col[temp_index]) * 10)
+                if check_direction_agreement(solution[temp_index], corr_col.iloc[temp_index]) == True:
+                    fitness_score = fitness_score + (np.abs(corr_col.iloc[temp_index]) * 10)
                 else: 
-                    fitness_score = fitness_score - (np.abs(corr_col[temp_index]) * 10)
+                    fitness_score = fitness_score - (np.abs(corr_col.iloc[temp_index]) * 10)
         
         if len(weight_dict) > 0:
             for temp_index in list(range(0, len(solution))):
@@ -701,10 +701,10 @@ def create_network(training_dict, corr_matrix, ideal_edges = 2, num_generations 
                 if solution[temp_index] == 0:
                     continue
                 else:
-                    if check_direction_agreement(solution[temp_index], corr_col[temp_index]) == True:
-                        fitness_score = fitness_score + (np.abs(corr_col[temp_index]) * 10)
+                    if check_direction_agreement(solution[temp_index], corr_col.iloc[temp_index]) == True:
+                        fitness_score = fitness_score + (np.abs(corr_col.iloc[temp_index]) * 10)
                     else: 
-                        fitness_score = fitness_score - (np.abs(corr_col[temp_index]) * 10)
+                        fitness_score = fitness_score - (np.abs(corr_col.iloc[temp_index]) * 10)
             
             if len(weight_dict) > 0:
                 for temp_index in list(range(0, len(solution))):
